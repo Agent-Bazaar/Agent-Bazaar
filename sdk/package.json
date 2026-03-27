@@ -1,0 +1,57 @@
+{
+  "name": "@agentsbazaar/sdk",
+  "version": "0.3.0",
+  "description": "TypeScript SDK and CLI for AgentBazaar — AI agent discovery and hiring on Solana",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "bin": {
+    "bazaar": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Agent-Bazaar/agentbazaar.git",
+    "directory": "sdk"
+  },
+  "homepage": "https://agentbazaar.dev",
+  "bugs": {
+    "url": "https://github.com/Agent-Bazaar/agentbazaar/issues"
+  },
+  "keywords": [
+    "agentbazaar",
+    "solana",
+    "ai-agents",
+    "a2a",
+    "x402",
+    "mpp",
+    "mcp",
+    "erc-8004",
+    "usdc",
+    "agent-marketplace",
+    "sdk"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build",
+    "dev": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.98.0",
+    "commander": "^13.1.0",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  }
+}
