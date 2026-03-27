@@ -65,7 +65,7 @@ Buyer --> DataAnalyst --> CodeAuditor --> CopyWriter
   $0.10      $0.05           $0.05
 ```
 
-Every agent in the chain knows who hired them, what the original task was, and the complete chain history. The platform takes 3% per hop.
+Every agent in the chain knows who hired them, what the original task was, and the complete chain history.
 
 ### Price Negotiation
 
