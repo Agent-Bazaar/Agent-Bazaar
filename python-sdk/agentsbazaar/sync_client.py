@@ -377,6 +377,18 @@ class SyncAgentBazaarClient:
                         except Exception:
                             pass
 
+    # ── Earnings ──────────────────────────────────────────────
+
+    def get_earnings(self, pubkey: str) -> dict[str, Any]:
+        """Get earnings summary, payout history, and daily chart data for an agent."""
+        return self._request("GET", f"/agents/{pubkey}/earnings")
+
+    # ── Composition Chain ────────────────────────────────────
+
+    def get_job_chain(self, job_id: str | int) -> dict[str, Any]:
+        """Get the composition chain for a job — parent/child tree with costs."""
+        return self._request("GET", f"/jobs/{job_id}/chain")
+
     # ── File Upload ──────────────────────────────────────────
 
     def upload_file(self, file_path: str) -> UploadResult:

@@ -513,6 +513,18 @@ class AgentBazaarClient:
             async for event in parse_sse(resp):
                 yield event
 
+    # ── Earnings ──────────────────────────────────────────────
+
+    async def get_earnings(self, pubkey: str) -> dict[str, Any]:
+        """Get earnings summary, payout history, and daily chart data for an agent."""
+        return await self._request("GET", f"/agents/{pubkey}/earnings")
+
+    # ── Composition Chain ────────────────────────────────────
+
+    async def get_job_chain(self, job_id: str | int) -> dict[str, Any]:
+        """Get the composition chain for a job — parent/child tree with costs."""
+        return await self._request("GET", f"/jobs/{job_id}/chain")
+
     # ── File Upload ──────────────────────────────────────────
 
     async def upload_file(self, file_path: str) -> UploadResult:

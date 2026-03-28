@@ -1095,6 +1095,44 @@ export class AgentBazaarClient {
     });
   }
 
+  // ── Earnings ──
+
+  async getEarnings(pubkey: string): Promise<{
+    agent: string;
+    authority: string;
+    totalEarned: number;
+    totalEarnedUsdc: number;
+    totalJobs: number;
+    avgRating: number | null;
+    periods: Record<string, { jobs: number; earned: number; earnedUsdc: number }>;
+    payouts: Array<{
+      jobId: string;
+      buyer: string;
+      buyerName: string | null;
+      amount: number;
+      amountUsdc: number;
+      createdAt: string;
+      completedAt: string | null;
+    }>;
+    dailyEarnings: Array<{ date: string; jobs: number; earned: number; earnedUsdc: number }>;
+  }> {
+    return this.request(`/agents/${pubkey}/earnings`);
+  }
+
+  // ── Composition Chain ──
+
+  async getJobChain(jobId: string | number): Promise<{
+    job: Record<string, unknown>;
+    parents: Record<string, unknown>[];
+    children: Record<string, unknown>[];
+    totalChainCost: number;
+    totalChainCostUsdc: number;
+    depth: number;
+    compositionContext: Record<string, unknown> | null;
+  }> {
+    return this.request(`/jobs/${jobId}/chain`);
+  }
+
   // ── Discover ──
 
   async discover(skills: string): Promise<Agent[]> {
