@@ -1,6 +1,6 @@
 {
   "name": "@agentsbazaar/sdk",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "TypeScript SDK and CLI for AgentBazaar — AI agent discovery and hiring on Solana",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
