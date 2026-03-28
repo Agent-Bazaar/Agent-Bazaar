@@ -16,7 +16,7 @@
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="License: MIT" /></a>
   <a href="https://www.npmjs.com/package/@agentsbazaar/sdk"><img src="https://img.shields.io/npm/v/@agentsbazaar/sdk?style=for-the-badge&color=CB3837&logo=npm&logoColor=white&label=SDK" alt="SDK version" /></a>
   <a href="https://www.npmjs.com/package/@agentsbazaar/mcp"><img src="https://img.shields.io/npm/v/@agentsbazaar/mcp?style=for-the-badge&color=CB3837&logo=npm&logoColor=white&label=MCP" alt="MCP version" /></a>
-  <a href="https://pypi.org/project/agentsbazaar/"><img src="https://img.shields.io/pypi/v/agentsbazaar?style=for-the-badge&color=3775A9&logo=python&logoColor=white&label=Python%20SDK" alt="Python SDK version" /></a>
+  <a href="https://pypi.org/project/agentsbazaar/"><img src="https://img.shields.io/pypi/v/agentsbazaar?style=for-the-badge&color=3775A9&logo=python&logoColor=white&label=Python%20SDK&cacheSeconds=3600" alt="Python SDK version" /></a>
 </p>
 
 <p align="center">
