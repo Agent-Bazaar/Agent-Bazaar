@@ -18,6 +18,7 @@ from .exceptions import APIError, AuthenticationError
 from .models import (
     A2AStreamEvent,
     A2ATaskResult,
+    ChatStreamEvent,
     Agent,
     AgentCard,
     CallResult,
@@ -260,6 +261,41 @@ class SyncAgentBazaarClient:
 
     def pay_session(self, payment_id: str, signed_transaction: str) -> dict[str, Any]:
         return self._request("POST", "/chat/pay", headers=self._auth_headers("chat"), json={"paymentId": payment_id, "signedTransaction": signed_transaction})
+
+    def pay_session_stream(
+        self, payment_id: str, signed_transaction: str, *, timeout_ms: int = 120_000,
+    ) -> Iterator[ChatStreamEvent]:
+        """Streaming version of pay_session(). Yields SSE events in real-time."""
+        kp = self._require_keypair()
+        auth = sign_message(kp, "chat")
+        headers = {
+            "Content-Type": "application/json",
+            "X-Wallet-Address": auth["X-Wallet-Address"],
+            "X-Wallet-Signature": auth["X-Wallet-Signature"],
+            "X-Wallet-Message": auth["X-Wallet-Message"],
+        }
+        client = self._get_client()
+        with client.stream(
+            "POST",
+            f"{self.base_url}/chat/stream",
+            json={"paymentId": payment_id, "signedTransaction": signed_transaction},
+            headers=headers,
+            timeout=timeout_ms / 1000,
+        ) as resp:
+            if not resp.is_success:
+                raise APIError(f"Stream failed: HTTP {resp.status_code}", resp.status_code)
+            buf = ""
+            for chunk in resp.iter_text():
+                buf += chunk
+                lines = buf.split("\n")
+                buf = lines.pop()
+                for line in lines:
+                    stripped = line.strip()
+                    if stripped.startswith("data: "):
+                        try:
+                            yield ChatStreamEvent.model_validate_json(stripped[6:])
+                        except Exception:
+                            pass
 
     def list_sessions(self, buyer: str | None = None, status: str | None = None) -> dict[str, Any]:
         qs = self._qs({"buyer": buyer, "status": status})

@@ -301,6 +301,27 @@ class A2ATaskResult(BaseModel):
 A2AStreamEvent = A2ATaskResult
 
 
+# ── Chat Stream ───────────────────────────────────────────────
+
+
+class ChatStreamEvent(BaseModel):
+    """SSE event from /chat/stream."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    type: Literal["payment", "working", "chunk", "input-required", "done", "error"]
+    tx_signature: str | None = Field(None, alias="txSignature")
+    message: str | None = None
+    text: str | None = None
+    append: bool | None = None
+    question: str | None = None
+    task_id: str | None = Field(None, alias="taskId")
+    result: Any | None = None
+    job: dict[str, Any] | None = None
+    session_id: str | None = Field(None, alias="sessionId")
+    error: str | None = None
+
+
 # ── Agent Card ────────────────────────────────────────────────
 
 

@@ -19,6 +19,7 @@ from .models import (
     ArtifactPart,
     CallParams,
     CallResult,
+    ChatStreamEvent,
     CrawlResult,
     FeedbackEntry,
     FeedbackResponse,

@@ -198,6 +198,20 @@ export interface A2ATaskResult {
 
 export type A2AStreamEvent = A2ATaskResult;
 
+export interface ChatStreamEvent {
+  type: "payment" | "working" | "chunk" | "input-required" | "done" | "error";
+  txSignature?: string;
+  message?: string;
+  text?: string;
+  append?: boolean;
+  question?: string;
+  taskId?: string;
+  result?: unknown;
+  job?: { id: number; status: string };
+  sessionId?: string;
+  error?: string;
+}
+
 export interface HireParams {
   jobId: string | number;
   task: string;

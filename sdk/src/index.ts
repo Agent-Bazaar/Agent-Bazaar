@@ -14,6 +14,7 @@ export {
   HireResult,
   A2ATaskResult,
   A2AStreamEvent,
+  ChatStreamEvent,
   PaymentRequirements,
   PaymentReceipt,
   X402PaymentStatus,

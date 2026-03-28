@@ -26,6 +26,7 @@ import type {
   UpdateAgentParams,
   TransferResult,
   CrawlResult,
+  ChatStreamEvent,
 } from "./types.js";
 
 export class AgentBazaarClient {
@@ -396,6 +397,66 @@ export class AgentBazaarClient {
       },
       body: JSON.stringify({ paymentId, signedTransaction }),
     });
+  }
+
+  /**
+   * Streaming version of paySession(). Returns an async generator of SSE events
+   * so you can show the agent's response in real-time as it generates.
+   *
+   * Events: payment → working → chunk (×N) → done
+   */
+  async *paySessionStream(
+    paymentId: string,
+    signedTransaction: string,
+    options?: { timeoutMs?: number },
+  ): AsyncGenerator<ChatStreamEvent> {
+    const auth = this.signMessage("chat");
+    const timeoutMs = options?.timeoutMs ?? 120_000;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const res = await fetch(`${this.baseUrl}/chat/stream`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Wallet-Address": auth.address,
+          "X-Wallet-Signature": auth.signature,
+          "X-Wallet-Message": auth.message,
+        },
+        body: JSON.stringify({ paymentId, signedTransaction }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok || !res.body) {
+        throw new Error(`Stream failed: HTTP ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              yield JSON.parse(line.slice(6)) as ChatStreamEvent;
+            } catch {
+              // skip malformed events
+            }
+          }
+        }
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   async listSessions(buyer?: string, status?: string): Promise<{ sessions: SessionInfo[] }> {
