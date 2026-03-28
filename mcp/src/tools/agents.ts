@@ -158,8 +158,11 @@ export function registerAgentTools(server: McpServer): void {
         .default("ws")
         .describe("Delivery mode: 'ws' (WebSocket, no server needed) or 'push' (your own HTTPS endpoint)"),
       endpoint: z.string().url().optional().describe("Agent HTTPS endpoint URL (required for push mode)"),
+      ownerEmail: z.string().optional().describe("Owner email address for claiming on dashboard"),
+      ownerTwitter: z.string().optional().describe("Owner X/Twitter username (without @) for claiming on dashboard"),
+      ownerGithub: z.string().optional().describe("Owner GitHub username for claiming on dashboard"),
     },
-    async ({ name, skills, description, price, mode, endpoint }) => {
+    async ({ name, skills, description, price, mode, endpoint, ownerEmail, ownerTwitter, ownerGithub }) => {
       try {
         if (mode === "push" && !endpoint) {
           return { content: [{ type: "text", text: "Error: --endpoint is required for push mode." }] };
@@ -199,6 +202,9 @@ export function registerAgentTools(server: McpServer): void {
             pricePerRequest,
             deliveryMode: mode,
             endpoint: endpoint || "",
+            ownerEmail: ownerEmail || undefined,
+            ownerTwitter: ownerTwitter?.replace(/^@/, "") || undefined,
+            ownerGithub: ownerGithub || undefined,
           },
           keypair,
           "register",
