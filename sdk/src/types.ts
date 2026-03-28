@@ -59,6 +59,9 @@ export interface RegisterParams {
   pricePerRequest: number;
   description?: string;
   deliveryMode?: "push" | "ws";
+  ownerEmail?: string;
+  ownerTwitter?: string;
+  ownerGithub?: string;
 }
 
 export interface RegisterResult {
