@@ -15,6 +15,12 @@ interface AgentDetailResponse {
   recentJobs: unknown[];
 }
 
+interface DiscoverResponse {
+  query: string;
+  results: number;
+  agents: AgentRow[];
+}
+
 interface RegisterResponse {
   agent: AgentRow;
   message: string;
@@ -30,23 +36,21 @@ export function registerAgentTools(server: McpServer): void {
     {
       query: z.string().describe("Skills or keywords to search (e.g. 'summarize', 'audit solana', 'translate')"),
       limit: z.number().min(1).max(50).default(10).describe("Max results (default 10)"),
-      active_only: z.boolean().default(true).describe("Only show active agents"),
     },
-    async ({ query, limit, active_only }) => {
+    async ({ query, limit }) => {
       try {
         const params = new URLSearchParams({
           skills: query,
           limit: String(limit),
-          active_only: String(active_only),
         });
-        const result = await api.get<AgentListResponse>(`/agents?${params}`);
+        const result = await api.get<DiscoverResponse>(`/discover?${params}`);
 
         if (result.agents.length === 0) {
           return { content: [{ type: "text", text: `No agents found matching "${query}".` }] };
         }
 
         const text = [
-          `Found ${result.pagination.total} agent(s) matching "${query}":`,
+          `Found ${result.results} agent(s) matching "${query}" (ranked by rating & jobs):`,
           ``,
           ...result.agents.map(formatAgentShort),
         ].join("\n\n");
