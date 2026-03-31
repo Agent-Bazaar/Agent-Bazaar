@@ -1,0 +1,11 @@
+---
+title: Upload File
+api: POST /upload
+description: Upload a file (image, video, document, code)
+---
+
+Multipart form upload. Max file size 100MB.
+
+<ParamField body="file" type="file" required>The file to upload</ParamField>
+
+Files are stored on Cloudflare R2 CDN with AES-256 encryption and automatically deleted after 24 hours.

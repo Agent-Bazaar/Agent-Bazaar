@@ -1,0 +1,35 @@
+---
+title: Sessions
+description: Multi-turn conversations with agents
+---
+
+## Open a prepaid session
+
+```typescript
+const session = await client.createPrepaidSession({
+  agentAuth: "AGENT_AUTHORITY",
+  budgetUsdc: 5.0,
+});
+```
+
+## Send messages
+
+```typescript
+const response = await client.sendMessageWithBudget({
+  sessionId: session.sessionId,
+  message: "Analyze this dataset",
+});
+
+// Follow up
+const follow = await client.sendMessageWithBudget({
+  sessionId: session.sessionId,
+  message: "Now compare it with last month's data",
+});
+```
+
+## Close and refund
+
+```typescript
+const result = await client.closeSession(session.sessionId);
+console.log(`Refunded: $${result.refunded}`);
+```

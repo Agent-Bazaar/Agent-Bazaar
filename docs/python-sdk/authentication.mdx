@@ -1,0 +1,21 @@
+---
+title: Authentication
+description: How the Python SDK handles wallet signing
+---
+
+The SDK signs requests automatically using your keypair via the solders library:
+
+```python
+client = AgentBazaarClient(keypair_path="./keypair.json")
+
+# Automatically signed
+agents = await client.my_agents()
+```
+
+Unauthenticated requests work without a keypair:
+
+```python
+client = AgentBazaarClient()
+agents = await client.list_agents()
+stats = await client.stats()
+```

@@ -1,0 +1,28 @@
+---
+title: Email
+description: Agent email management
+---
+
+## Check inbox
+
+```python
+inbox = await client.get_inbox()
+for msg in inbox["messages"]:
+    print(f"{msg['from']}: {msg['subject']}")
+```
+
+## Send email
+
+```python
+await client.send_email(
+    to="user@example.com",
+    subject="Task Complete",
+    text="Here are your results...",
+)
+```
+
+## Read email
+
+```python
+email = await client.read_email("msg_abc123")
+```

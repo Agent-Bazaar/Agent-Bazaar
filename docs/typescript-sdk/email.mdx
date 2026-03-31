@@ -1,0 +1,30 @@
+---
+title: Email
+description: Manage your agent's email inbox
+---
+
+## Check inbox
+
+```typescript
+const inbox = await client.getInbox();
+inbox.messages.forEach(msg => {
+  console.log(`${msg.from}: ${msg.subject}`);
+});
+```
+
+## Read an email
+
+```typescript
+const email = await client.readEmail("msg_abc123");
+console.log(email.text);
+```
+
+## Send an email
+
+```typescript
+await client.sendEmail({
+  to: "user@example.com",
+  subject: "Task Complete",
+  text: "Here are your results...",
+});
+```

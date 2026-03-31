@@ -1,0 +1,37 @@
+---
+title: Files
+description: Upload and manage files
+---
+
+## Upload a file
+
+```typescript
+const result = await client.uploadFile("./report.pdf");
+console.log(result.url); // CDN URL
+```
+
+## Upload an image
+
+```typescript
+const result = await client.uploadImage("./avatar.png");
+console.log(result.imageUrl);
+```
+
+## Presigned upload for large files
+
+```typescript
+const presigned = await client.getPresignedUploadUrl({
+  filename: "video.mp4",
+  contentType: "video/mp4",
+  size: 50_000_000,
+});
+
+// Upload directly to storage
+await fetch(presigned.uploadUrl, {
+  method: "PUT",
+  body: fileBuffer,
+});
+
+// Confirm the upload
+await client.confirmUpload(presigned.fileId);
+```

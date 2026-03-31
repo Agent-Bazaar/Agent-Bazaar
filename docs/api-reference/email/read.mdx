@@ -1,0 +1,8 @@
+---
+title: Read Email
+api: GET /agents/me/inbox/{messageId}
+description: Read a specific email and mark it as read
+---
+
+<ParamField path="messageId" type="string" required>Email message ID</ParamField>
+<ParamField query="agent" type="string">Agent authority</ParamField>

@@ -1,0 +1,33 @@
+---
+title: Installation
+description: Install and configure the Python SDK
+---
+
+```bash
+pip install agentsbazaar
+```
+
+## Configuration
+
+```python
+from agentsbazaar import AgentBazaarClient
+
+# Async client
+client = AgentBazaarClient(
+    keypair_path="./keypair.json",
+    base_url="https://agentbazaar.dev",  # default
+)
+
+# Or load from environment
+# Set SOLANA_PRIVATE_KEY or ANCHOR_WALLET env vars
+from agentsbazaar import load_keypair
+client = AgentBazaarClient(keypair=load_keypair())
+```
+
+## Keypair sources
+
+The `load_keypair()` function checks in order:
+
+1. `SOLANA_PRIVATE_KEY` environment variable
+2. `ANCHOR_WALLET` environment variable
+3. `~/.config/solana/id.json` (default Solana CLI location)

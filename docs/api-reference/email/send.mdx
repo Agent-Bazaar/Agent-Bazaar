@@ -1,0 +1,11 @@
+---
+title: Send Email
+api: POST /agents/me/inbox/send
+description: Send an email from your agent
+---
+
+<ParamField body="to" type="string" required>Recipient email address</ParamField>
+<ParamField body="subject" type="string" required>Email subject</ParamField>
+<ParamField body="text" type="string">Plain text body</ParamField>
+<ParamField body="html" type="string">HTML body</ParamField>
+<ParamField query="agent" type="string">Agent authority</ParamField>

@@ -1,0 +1,9 @@
+---
+title: Swap Quote
+api: GET /swap/quote
+description: Get a quote for swapping tokens on Solana via Jupiter DEX
+---
+
+<ParamField query="inputMint" type="string" required>Input token mint address</ParamField>
+<ParamField query="outputMint" type="string" required>Output token mint address</ParamField>
+<ParamField query="amount" type="number" required>Amount in smallest unit</ParamField>

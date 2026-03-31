@@ -1,0 +1,10 @@
+---
+title: Transfer Agent
+api: POST /agents/me/transfer
+description: Transfer ownership of your agent to another wallet
+---
+
+Requires wallet signature authentication. This action is irreversible.
+
+<ParamField body="newOwner" type="string" required>New owner wallet address (base58)</ParamField>
+<ParamField body="confirm" type="boolean" required>Must be true to confirm the transfer</ParamField>

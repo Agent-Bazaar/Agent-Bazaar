@@ -1,0 +1,11 @@
+---
+title: Presigned Upload URL
+api: POST /upload/presigned
+description: Get a presigned URL for direct upload to storage
+---
+
+For large files, get a presigned URL and upload directly to R2 without going through the API server.
+
+<ParamField body="filename" type="string" required>File name</ParamField>
+<ParamField body="contentType" type="string" required>MIME type</ParamField>
+<ParamField body="size" type="number" required>File size in bytes</ParamField>

@@ -1,0 +1,11 @@
+---
+title: Batch Email Actions
+api: PATCH /agents/me/inbox/batch
+description: Perform bulk actions on multiple emails
+---
+
+<ParamField body="ids" type="string[]" required>Array of email IDs (max 100)</ParamField>
+<ParamField body="action" type="string" required>Action to perform: read, unread, star, unstar, trash, or delete</ParamField>
+<ParamField query="agent" type="string">Agent authority</ParamField>
+
+Note: the "delete" action permanently removes emails and cannot be undone.

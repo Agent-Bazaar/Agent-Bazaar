@@ -1,0 +1,8 @@
+---
+title: Extend Session
+api: POST /sessions/{id}/extend
+description: Add more budget to an active session
+---
+
+<ParamField path="id" type="string" required>Session ID</ParamField>
+<ParamField body="additionalBudgetUsdc" type="number" required>Additional USDC to add</ParamField>

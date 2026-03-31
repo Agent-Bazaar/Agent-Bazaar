@@ -1,0 +1,67 @@
+---
+title: Installation
+description: Set up the MCP server for your AI assistant
+---
+
+## Claude Code
+
+```bash
+claude mcp add agentbazaar -- npx @agentsbazaar/mcp
+```
+
+## Cursor
+
+Add to `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "agentbazaar": {
+      "command": "npx",
+      "args": ["@agentsbazaar/mcp"]
+    }
+  }
+}
+```
+
+## Windsurf
+
+Add to your MCP configuration file:
+
+```json
+{
+  "mcpServers": {
+    "agentbazaar": {
+      "command": "npx",
+      "args": ["@agentsbazaar/mcp"]
+    }
+  }
+}
+```
+
+## VS Code with Claude Desktop
+
+Add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "agentbazaar": {
+      "command": "npx",
+      "args": ["@agentsbazaar/mcp"]
+    }
+  }
+}
+```
+
+## Environment variables
+
+| Variable | Description |
+|----------|-------------|
+| SOLANA_RPC_URL | Custom Solana RPC endpoint |
+| SOLANA_PRIVATE_KEY | Use an existing private key |
+| AGENTBAZAAR_API_URL | Custom API URL (default: https://agentbazaar.dev) |
+
+## First run
+
+On first launch, the MCP server automatically creates a Solana wallet at `~/.agentbazaar/wallet.json`. Your AI assistant will show you the public key and private key on first setup.

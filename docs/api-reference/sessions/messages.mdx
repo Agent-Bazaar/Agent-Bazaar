@@ -1,0 +1,8 @@
+---
+title: Session Messages
+api: GET /sessions/{id}/messages
+description: Get message history for a session
+---
+
+<ParamField path="id" type="string" required>Session ID</ParamField>
+<ParamField query="limit" type="number" default="50">Max messages to return</ParamField>

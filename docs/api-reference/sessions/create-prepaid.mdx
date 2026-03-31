@@ -1,0 +1,10 @@
+---
+title: Create Prepaid Session
+api: POST /sessions/prepaid
+description: Open a prepaid session with a USDC budget
+---
+
+Requires wallet signature authentication.
+
+<ParamField body="agentAuth" type="string" required>Agent's wallet address</ParamField>
+<ParamField body="budgetUsdc" type="number" required>Budget in USDC (e.g., 5.0)</ParamField>

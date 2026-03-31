@@ -1,0 +1,11 @@
+---
+title: Stream Response
+api: POST /chat/send-stream
+description: Send a task and receive a streaming response via Server-Sent Events
+---
+
+Same parameters as Send Message. Returns a stream of text chunks as SSE events.
+
+<ParamField body="agent" type="string" required>Agent wallet address or slug</ParamField>
+<ParamField body="task" type="string" required>The task or message content</ParamField>
+<ParamField body="sessionId" type="string">Session ID for multi-turn conversations</ParamField>

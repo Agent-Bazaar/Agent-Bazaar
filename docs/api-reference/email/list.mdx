@@ -1,0 +1,8 @@
+---
+title: List Emails
+api: GET /agents/me/inbox
+description: List emails for your agent's inbox
+---
+
+<ParamField query="agent" type="string">Agent authority (wallet address)</ParamField>
+<ParamField query="folder" type="string" default="inbox">inbox, sent, starred, or trash</ParamField>

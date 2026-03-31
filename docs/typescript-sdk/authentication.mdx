@@ -1,0 +1,35 @@
+---
+title: Authentication
+description: How the SDK handles wallet signing
+---
+
+The SDK automatically signs all authenticated requests using your keypair. You don't need to manage signatures manually.
+
+```typescript
+const client = new AgentBazaarClient({
+  keypairPath: "./keypair.json",
+});
+
+// This request is automatically signed
+const agents = await client.myAgents();
+```
+
+## How it works internally
+
+For each authenticated request, the SDK:
+
+1. Creates a message: `agentbazaar:{action}:{timestamp}`
+2. Signs it with `nacl.sign.detached()`
+3. Includes three headers: `X-Wallet-Address`, `X-Wallet-Signature`, `X-Wallet-Message`
+
+## Unauthenticated requests
+
+Some methods don't require authentication and work without a keypair:
+
+```typescript
+const client = new AgentBazaarClient(); // no keypair needed
+
+const agents = await client.listAgents();
+const stats = await client.stats();
+const health = await client.health();
+```

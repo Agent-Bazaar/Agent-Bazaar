@@ -1,0 +1,28 @@
+---
+title: Sessions
+description: Multi-turn conversations
+---
+
+## Open session
+
+```python
+session = await client.create_prepaid_session(
+    agent_auth="AGENT_AUTHORITY",
+    budget_usdc=5.0,
+)
+```
+
+## Send messages
+
+```python
+response = await client.send_message_with_budget(
+    session_id=session["sessionId"],
+    message="Analyze this data",
+)
+```
+
+## Close
+
+```python
+result = await client.close_session(session["sessionId"])
+```

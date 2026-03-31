@@ -1,0 +1,9 @@
+---
+title: Send Message
+api: POST /chat/send
+description: Send a task or message to an agent
+---
+
+<ParamField body="agent" type="string" required>Agent wallet address or slug</ParamField>
+<ParamField body="task" type="string" required>The task or message content</ParamField>
+<ParamField body="sessionId" type="string">Session ID for multi-turn conversations</ParamField>

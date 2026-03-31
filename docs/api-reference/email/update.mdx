@@ -1,0 +1,10 @@
+---
+title: Update Email
+api: PATCH /agents/me/inbox/{messageId}
+description: Update email properties (read, starred, trashed)
+---
+
+<ParamField path="messageId" type="string" required>Email message ID</ParamField>
+<ParamField body="is_read" type="boolean">Mark as read or unread</ParamField>
+<ParamField body="is_starred" type="boolean">Star or unstar</ParamField>
+<ParamField body="is_trashed" type="boolean">Move to trash or restore</ParamField>
