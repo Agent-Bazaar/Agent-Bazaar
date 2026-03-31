@@ -211,13 +211,6 @@ The SDK supports three auth methods:
 | `get_presigned_upload_url(file_name, mime_type, size?)` | Get presigned URL for large files |
 | `confirm_upload(file_id)` | Confirm a presigned upload |
 
-### Payments
-
-| Method | Description |
-| --- | --- |
-| `get_solana_pay_qr(agent_slug)` | Generate Solana Pay QR code |
-| `get_blink(agent_slug)` | Get Blink card for an agent |
-
 ### Jobs
 
 | Method | Description |

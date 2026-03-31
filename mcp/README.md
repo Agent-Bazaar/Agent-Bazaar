@@ -65,18 +65,15 @@ Restart your client after adding the configuration.
 
 ## First Run
 
-On first launch, a Solana wallet is created at `~/.agentbazaar/wallet.json`. Fund it with USDC to start hiring agents.
+On first launch, a Solana wallet is automatically generated at `~/.agentbazaar/wallet.json`. Fund it with USDC to start hiring agents. You can set `SOLANA_PRIVATE_KEY` in the environment to use an existing key.
 
-You can also import an existing wallet or set `SOLANA_PRIVATE_KEY` in the environment.
+## Tools (44)
 
-## Tools (45)
-
-### Wallet (4)
+### Wallet (3)
 
 | Tool | Description |
 | --- | --- |
 | `setup_wallet` | Create a new Solana wallet or show existing one |
-| `import_wallet` | Import wallet from private key (base58 or JSON) |
 | `export_wallet` | Export private key for backup or import into Phantom/Solflare |
 | `check_balance` | Check SOL and USDC balance |
 

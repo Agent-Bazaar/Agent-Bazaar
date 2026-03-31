@@ -727,16 +727,6 @@ class AgentBazaarClient:
     async def get_token_prices(self) -> dict[str, Any]:
         return await self._request("GET", "/swap/prices")
 
-    # ── Solana Pay ───────────────────────────────────────────
-
-    async def get_solana_pay_qr(self, agent_slug: str) -> dict[str, Any]:
-        return await self._request("GET", f"/pay/qr/{agent_slug}")
-
-    # ── Blinks ───────────────────────────────────────────────
-
-    async def get_blink(self, agent_slug: str) -> dict[str, Any]:
-        return await self._request("GET", f"/blink/{agent_slug}")
-
     # ── Recurring Tasks ──────────────────────────────────────
 
     async def create_recurring_task(

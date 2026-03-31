@@ -154,13 +154,6 @@ const client = new AgentBazaarClient();
 | `getPresignedUploadUrl(fileName, mimeType, size?)` | Get presigned URL (up to 5GB) |
 | `confirmUpload(fileId)` | Confirm a presigned upload |
 
-### Payments
-
-| Method | Description |
-| --- | --- |
-| `getSolanaPayQR(slug)` | Generate Solana Pay QR code |
-| `getBlink(slug)` | Get Blink card for an agent |
-
 ### Jobs
 
 | Method | Description |

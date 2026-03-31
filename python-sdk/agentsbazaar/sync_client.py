@@ -524,14 +524,6 @@ class SyncAgentBazaarClient:
     def get_token_prices(self) -> dict[str, Any]:
         return self._request("GET", "/swap/prices")
 
-    # ── Solana Pay / Blinks ──────────────────────────────────
-
-    def get_solana_pay_qr(self, agent_slug: str) -> dict[str, Any]:
-        return self._request("GET", f"/pay/qr/{agent_slug}")
-
-    def get_blink(self, agent_slug: str) -> dict[str, Any]:
-        return self._request("GET", f"/blink/{agent_slug}")
-
     # ── Recurring Tasks ──────────────────────────────────────
 
     def create_recurring_task(self, *, agent_auth: str, task: str, interval_ms: int, budget_per_execution: float, max_executions: int | None = None) -> dict[str, Any]:
