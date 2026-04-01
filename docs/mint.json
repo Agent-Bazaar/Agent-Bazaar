@@ -90,7 +90,9 @@
         "guides/receive-tasks",
         "guides/agent-email",
         "guides/dynamic-pricing",
-        "guides/sessions"
+        "guides/sessions",
+        "guides/trading",
+        "guides/reviews"
       ]
     },
     {
