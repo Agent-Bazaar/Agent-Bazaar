@@ -220,4 +220,100 @@ export function registerHiringTools(server: McpServer): void {
       }
     },
   );
+
+  // ── review_agent ──
+  server.tool(
+    "review_agent",
+    "Leave a review for an agent (1-5 stars). Reviews are submitted on-chain via 8004-solana and show up on 8004market. Both humans and agents can leave reviews.",
+    {
+      agentPubkey: z.string().describe("The agent's pubkey/authority to review"),
+      stars: z.number().min(1).max(5).describe("Rating from 1 to 5 stars"),
+      comment: z.string().optional().describe("Optional review comment"),
+    },
+    async ({ agentPubkey, stars, comment }) => {
+      try {
+        if (!walletExists()) {
+          return { content: [{ type: "text", text: "No wallet. Use `setup_wallet` first." }] };
+        }
+
+        const keypair = loadWallet();
+        const { signMessage } = await import("../wallet.js");
+        const auth = signMessage(keypair, "review");
+
+        // Step 1: Build review
+        const buildRes = await fetch(`${process.env.AGENTBAZAAR_API || "https://agentbazaar.dev"}/feedback/build`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Wallet-Address": auth.address,
+            "X-Wallet-Signature": auth.signature,
+            "X-Wallet-Message": auth.message,
+          },
+          body: JSON.stringify({ agentPubkey, score: stars, comment }),
+        });
+
+        if (!buildRes.ok) {
+          const err = await buildRes.json();
+          return {
+            content: [
+              { type: "text", text: `Failed to build review: ${(err as { error?: string }).error || buildRes.status}` },
+            ],
+          };
+        }
+
+        const buildData = (await buildRes.json()) as { reviewMessage: string; agentMint: string; agentName: string };
+
+        // Step 2: Sign the review message
+        const nacl = (await import("tweetnacl")).default;
+        const msgBytes = new TextEncoder().encode(buildData.reviewMessage);
+        const reviewSig = nacl.sign.detached(msgBytes, keypair.secretKey);
+        const sigBase64 = Buffer.from(reviewSig).toString("base64");
+
+        // Step 3: Submit
+        const auth2 = signMessage(keypair, "review");
+        const submitRes = await fetch(`${process.env.AGENTBAZAAR_API || "https://agentbazaar.dev"}/feedback/submit`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Wallet-Address": auth2.address,
+            "X-Wallet-Signature": auth2.signature,
+            "X-Wallet-Message": auth2.message,
+          },
+          body: JSON.stringify({
+            agentPubkey,
+            agentMint: buildData.agentMint,
+            score: stars,
+            comment,
+            reviewSignature: sigBase64,
+            reviewMessage: buildData.reviewMessage,
+          }),
+        });
+
+        const result = (await submitRes.json()) as { success: boolean; verified: boolean; message: string };
+
+        if (result.success) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: [
+                  `**${stars}-star review submitted for ${buildData.agentName}!**`,
+                  result.verified ? `Wallet verified ✓` : "",
+                  comment ? `Comment: "${comment}"` : "",
+                  ``,
+                  `Your review is on-chain and visible on 8004market.`,
+                ]
+                  .filter(Boolean)
+                  .join("\n"),
+              },
+            ],
+          };
+        }
+
+        return { content: [{ type: "text", text: `Review failed: ${result.message}` }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : err}` }] };
+      }
+    },
+  );
 }

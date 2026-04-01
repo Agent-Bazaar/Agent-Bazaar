@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { walletExists, loadWallet, createWallet, importWallet, exportWallet, getWalletPath } from "../wallet.js";
+import { walletExists, loadWallet, createWallet, exportWallet, getWalletPath } from "../wallet.js";
 
 const SOLANA_RPC = process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
 
@@ -15,37 +15,38 @@ export function registerWalletTools(server: McpServer): void {
   // ── setup_wallet ──
   server.tool(
     "setup_wallet",
-    "Create a new Solana wallet or show existing one. The wallet is stored locally and used for agent registration and hiring.",
+    "Create an OWS encrypted wallet for your agent. Multi-chain (Solana + 7 other chains) from one seed phrase. Can be exported to Phantom/Solflare.",
     {},
     async () => {
       try {
-        const { keypair, privateKeyBase58, isNew } = createWallet();
-        const pubkey = keypair.publicKey.toBase58();
+        const result = createWallet();
+        const pubkey = result.keypair.publicKey.toBase58();
 
-        if (isNew) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: [
-                  `Wallet created successfully!`,
-                  ``,
-                  `**Public Key:** \`${pubkey}\``,
-                  `**Private Key:** \`${privateKeyBase58}\``,
-                  ``,
-                  `> **IMPORTANT:** Save your private key now. It won't be shown again.`,
-                  `> You can export it later with the \`export_wallet\` tool.`,
-                  ``,
-                  `**Next steps:**`,
-                  `1. Deposit USDC (Solana) to \`${pubkey}\` to start hiring agents`,
-                  `2. Use \`register_agent\` to register your AI agent`,
-                  `3. Use \`hire_agent\` to hire other agents`,
-                  ``,
-                  `Wallet stored at: \`${getWalletPath()}\``,
-                ].join("\n"),
-              },
-            ],
-          };
+        if (result.isNew) {
+          const lines = [`Wallet created with OWS (Open Wallet Standard)!`, ``, `**Solana Address:** \`${pubkey}\``];
+
+          if (result.mnemonic) {
+            lines.push(
+              ``,
+              `**Recovery Phrase (12 words):**`,
+              `\`${result.mnemonic}\``,
+              ``,
+              `> **SAVE THIS NOW.** Import into Phantom: Settings > Manage Accounts > Import via Recovery Phrase.`,
+              `> This phrase gives access to wallets on Solana + 7 other chains.`,
+            );
+          }
+
+          lines.push(
+            ``,
+            `**Next steps:**`,
+            `1. Deposit USDC (Solana) to \`${pubkey}\` to start hiring agents`,
+            `2. Deposit SOL for trading (Jupiter swaps need SOL for gas)`,
+            `3. Use \`register_agent\` to register your AI agent`,
+            ``,
+            `Wallet stored at: \`${getWalletPath()}\``,
+          );
+
+          return { content: [{ type: "text", text: lines.join("\n") }] };
         }
 
         return {
@@ -55,9 +56,9 @@ export function registerWalletTools(server: McpServer): void {
               text: [
                 `Wallet already exists.`,
                 ``,
-                `**Public Key:** \`${pubkey}\``,
+                `**Solana Address:** \`${pubkey}\``,
                 ``,
-                `Use \`export_wallet\` to see your private key.`,
+                `Use \`export_wallet\` to see your recovery phrase.`,
                 `Use \`check_balance\` to see your USDC balance.`,
               ].join("\n"),
             },
@@ -69,74 +70,36 @@ export function registerWalletTools(server: McpServer): void {
     },
   );
 
-  // ── import_wallet ──
-  server.tool(
-    "import_wallet",
-    "Import an existing Solana wallet from a private key (base58 or JSON array format).",
-    { private_key: z.string().describe("Private key in base58 or JSON array format") },
-    async ({ private_key }) => {
-      try {
-        if (walletExists() && !process.env.SOLANA_PRIVATE_KEY) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: [
-                  `A wallet already exists at \`${getWalletPath()}\`.`,
-                  `Importing will **overwrite** the existing wallet.`,
-                  ``,
-                  `To proceed, delete the existing wallet file first:`,
-                  `\`rm ${getWalletPath()}\``,
-                  ``,
-                  `Then run import_wallet again.`,
-                ].join("\n"),
-              },
-            ],
-          };
-        }
-
-        const keypair = importWallet(private_key);
-        return {
-          content: [
-            {
-              type: "text",
-              text: [
-                `Wallet imported successfully!`,
-                ``,
-                `**Public Key:** \`${keypair.publicKey.toBase58()}\``,
-                `Stored at: \`${getWalletPath()}\``,
-              ].join("\n"),
-            },
-          ],
-        };
-      } catch (err) {
-        return { content: [{ type: "text", text: `Import failed: ${err instanceof Error ? err.message : err}` }] };
-      }
-    },
-  );
-
   // ── export_wallet ──
   server.tool(
     "export_wallet",
-    "Show your wallet's private key for backup or import into other wallets (Phantom, Solflare, etc).",
+    "Export your wallet's recovery phrase and private key for backup or import into Phantom/Solflare.",
     {},
     async () => {
       try {
-        const { publicKey, privateKeyBase58 } = exportWallet();
-        return {
-          content: [
-            {
-              type: "text",
-              text: [
-                `**Public Key:** \`${publicKey}\``,
-                `**Private Key:** \`${privateKeyBase58}\``,
-                ``,
-                `> **WARNING:** Keep this private. Anyone with this key controls your funds.`,
-                `> You can import this key into Phantom, Solflare, or any Solana wallet.`,
-              ].join("\n"),
-            },
-          ],
-        };
+        const result = exportWallet();
+        const lines = [`**Solana Address:** \`${result.publicKey}\``];
+
+        if (result.mnemonic) {
+          lines.push(
+            ``,
+            `**Recovery Phrase (BIP-39):**`,
+            `\`${result.mnemonic}\``,
+            ``,
+            `> Import into Phantom: Settings > Manage Accounts > Import via Recovery Phrase`,
+            `> This phrase works across Solana, Ethereum, Bitcoin, and other chains.`,
+          );
+        }
+
+        lines.push(
+          ``,
+          `**Private Key (Solana):**`,
+          `\`${result.privateKeyBase58}\``,
+          ``,
+          `> **WARNING:** Anyone with these credentials controls your wallet and funds.`,
+        );
+
+        return { content: [{ type: "text", text: lines.join("\n") }] };
       } catch (err) {
         return { content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : err}` }] };
       }
@@ -164,7 +127,6 @@ export function registerWalletTools(server: McpServer): void {
       let usdcBalance = 0;
       if (tokenAccounts.value.length > 0) {
         const accountData = tokenAccounts.value[0].account.data;
-        // SPL token account layout: amount is at offset 64, 8 bytes LE
         usdcBalance = Number(accountData.readBigUInt64LE(64));
       }
 
@@ -172,9 +134,17 @@ export function registerWalletTools(server: McpServer): void {
 
       const lines = [`**Wallet:** \`${pubkey}\``, `**SOL:** ${solFormatted} SOL`, `**USDC:** $${usdcFormatted}`];
 
-      if (usdcBalance === 0) {
-        lines.push(``);
-        lines.push(`No USDC balance. Deposit USDC (Solana) to \`${pubkey}\` to start hiring agents.`);
+      if (usdcBalance === 0 && solBalance === 0) {
+        lines.push(
+          ``,
+          `No balance. To get started:`,
+          `- Deposit USDC to \`${pubkey}\` for hiring agents`,
+          `- Deposit SOL for trading (Jupiter swaps need SOL for gas)`,
+        );
+      } else if (usdcBalance === 0) {
+        lines.push(``, `No USDC. Deposit USDC (Solana) to \`${pubkey}\` to start hiring agents.`);
+      } else if (solBalance < 5_000_000) {
+        lines.push(``, `Low SOL. Deposit SOL for trading — Jupiter swaps need SOL for gas fees.`);
       }
 
       return { content: [{ type: "text", text: lines.join("\n") }] };

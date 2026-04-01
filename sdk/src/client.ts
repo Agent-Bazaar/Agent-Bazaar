@@ -26,7 +26,6 @@ import type {
   UpdateAgentParams,
   TransferResult,
   CrawlResult,
-  ChatStreamEvent,
 } from "./types.js";
 
 export class AgentBazaarClient {
@@ -397,66 +396,6 @@ export class AgentBazaarClient {
       },
       body: JSON.stringify({ paymentId, signedTransaction }),
     });
-  }
-
-  /**
-   * Streaming version of paySession(). Returns an async generator of SSE events
-   * so you can show the agent's response in real-time as it generates.
-   *
-   * Events: payment → working → chunk (×N) → done
-   */
-  async *paySessionStream(
-    paymentId: string,
-    signedTransaction: string,
-    options?: { timeoutMs?: number },
-  ): AsyncGenerator<ChatStreamEvent> {
-    const auth = this.signMessage("chat");
-    const timeoutMs = options?.timeoutMs ?? 120_000;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-      const res = await fetch(`${this.baseUrl}/chat/stream`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Wallet-Address": auth.address,
-          "X-Wallet-Signature": auth.signature,
-          "X-Wallet-Message": auth.message,
-        },
-        body: JSON.stringify({ paymentId, signedTransaction }),
-        signal: controller.signal,
-      });
-
-      if (!res.ok || !res.body) {
-        throw new Error(`Stream failed: HTTP ${res.status}`);
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              yield JSON.parse(line.slice(6)) as ChatStreamEvent;
-            } catch {
-              // skip malformed events
-            }
-          }
-        }
-      }
-    } finally {
-      clearTimeout(timeout);
-    }
   }
 
   async listSessions(buyer?: string, status?: string): Promise<{ sessions: SessionInfo[] }> {
@@ -974,23 +913,6 @@ export class AgentBazaarClient {
     return this.request("/swap/prices");
   }
 
-  // ── Solana Pay ──
-
-  async getSolanaPayQR(agentSlug: string): Promise<{ url: string; qrData: string }> {
-    return this.request(`/pay/qr/${agentSlug}`);
-  }
-
-  // ── Blinks ──
-
-  async getBlink(agentSlug: string): Promise<{
-    icon: string;
-    title: string;
-    description: string;
-    links: { actions: Array<{ label: string; href: string }> };
-  }> {
-    return this.request(`/blink/${agentSlug}`);
-  }
-
   // ── Recurring Tasks ──
 
   async createRecurringTask(params: {
@@ -1095,44 +1017,6 @@ export class AgentBazaarClient {
     });
   }
 
-  // ── Earnings ──
-
-  async getEarnings(pubkey: string): Promise<{
-    agent: string;
-    authority: string;
-    totalEarned: number;
-    totalEarnedUsdc: number;
-    totalJobs: number;
-    avgRating: number | null;
-    periods: Record<string, { jobs: number; earned: number; earnedUsdc: number }>;
-    payouts: Array<{
-      jobId: string;
-      buyer: string;
-      buyerName: string | null;
-      amount: number;
-      amountUsdc: number;
-      createdAt: string;
-      completedAt: string | null;
-    }>;
-    dailyEarnings: Array<{ date: string; jobs: number; earned: number; earnedUsdc: number }>;
-  }> {
-    return this.request(`/agents/${pubkey}/earnings`);
-  }
-
-  // ── Composition Chain ──
-
-  async getJobChain(jobId: string | number): Promise<{
-    job: Record<string, unknown>;
-    parents: Record<string, unknown>[];
-    children: Record<string, unknown>[];
-    totalChainCost: number;
-    totalChainCostUsdc: number;
-    depth: number;
-    compositionContext: Record<string, unknown> | null;
-  }> {
-    return this.request(`/jobs/${jobId}/chain`);
-  }
-
   // ── Discover ──
 
   async discover(skills: string): Promise<Agent[]> {
@@ -1152,6 +1036,234 @@ export class AgentBazaarClient {
       method: "POST",
       headers: this.authHeaders("claim"),
       body: JSON.stringify({ agentPubkey, accessCode }),
+    });
+  }
+
+  // ── Trading (USDC-denominated, 3% platform fee) ──
+
+  /**
+   * Buy tokens with USDC. Platform takes 3% fee, swaps rest via Jupiter.
+   * Agent wallet needs USDC + SOL (for gas).
+   *
+   * @param tokenMint - Solana mint address of the token to buy
+   * @param spendUsdc - Amount of USDC to spend (e.g., 5.00)
+   * @param slippage - Slippage in basis points (default: auto based on liquidity)
+   */
+  async buyToken(
+    tokenMint: string,
+    spendUsdc: number,
+    slippage?: number,
+  ): Promise<{ signature: string; tokensReceived: string; platformFee: string }> {
+    if (!this.apiKey) throw new Error("API key required for trading");
+    return this.request("/agents/actions/buy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": this.apiKey },
+      body: JSON.stringify({ tokenMint, spendUsdc, slippage }),
+    });
+  }
+
+  /**
+   * Sell tokens for USDC. Platform takes 3% of USDC received.
+   *
+   * @param tokenMint - Solana mint address of the token to sell
+   * @param tokenAmount - Amount of tokens to sell (in smallest units)
+   * @param slippage - Slippage in basis points
+   */
+  async sellToken(
+    tokenMint: string,
+    tokenAmount: string,
+    slippage?: number,
+  ): Promise<{ signature: string; netUsdc: string; platformFee: string }> {
+    if (!this.apiKey) throw new Error("API key required for trading");
+    return this.request("/agents/actions/sell", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": this.apiKey },
+      body: JSON.stringify({ tokenMint, tokenAmount, slippage }),
+    });
+  }
+
+  /**
+   * Send USDC to another agent. Platform takes 3% fee.
+   *
+   * @param recipient - Recipient's Solana wallet address
+   * @param amountUsdc - Amount of USDC to send
+   */
+  async sendUsdc(
+    recipient: string,
+    amountUsdc: number,
+  ): Promise<{ signature: string; recipientReceived: string; platformFee: string }> {
+    if (!this.apiKey) throw new Error("API key required for trading");
+    return this.request("/agents/actions/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": this.apiKey },
+      body: JSON.stringify({ recipient, amountUsdc }),
+    });
+  }
+
+  /**
+   * Get agent's portfolio — USDC balance + all token holdings with values.
+   */
+  async getPortfolio(): Promise<{
+    usdc: number;
+    holdings: Array<{ mint: string; balance: string; usdcValue: number | null }>;
+    totalValue: number;
+  }> {
+    if (!this.apiKey) throw new Error("API key required for portfolio");
+    return this.request("/agents/actions/portfolio", {
+      headers: { "x-api-key": this.apiKey },
+    });
+  }
+
+  /**
+   * Get trading P&L — total buys, sells, fees, realized profit/loss, win rate.
+   */
+  async getTradingPnL(): Promise<{
+    totalBuys: number;
+    totalSells: number;
+    totalFeesPaid: number;
+    realizedPnl: number;
+    tradeCount: number;
+    winRate: number | null;
+  }> {
+    if (!this.apiKey) throw new Error("API key required for P&L");
+    return this.request("/agents/actions/pnl", {
+      headers: { "x-api-key": this.apiKey },
+    });
+  }
+
+  /**
+   * Get trade history.
+   */
+  async getTradeHistory(limit?: number): Promise<{ trades: Array<Record<string, unknown>> }> {
+    if (!this.apiKey) throw new Error("API key required for trade history");
+    const qs = limit ? `?limit=${limit}` : "";
+    return this.request(`/agents/actions/trades${qs}`, {
+      headers: { "x-api-key": this.apiKey },
+    });
+  }
+
+  /**
+   * Get token price and market cap.
+   *
+   * @param tokenMintOrSymbol - Mint address or symbol (SOL, BONK, etc)
+   */
+  async getTokenInfo(tokenMintOrSymbol: string): Promise<{
+    symbol: string;
+    mint: string;
+    priceUsdc: number;
+    marketCapUsdc: number | null;
+    liquidity: number | null;
+  }> {
+    return this.request(`/agents/actions/price/${encodeURIComponent(tokenMintOrSymbol)}`);
+  }
+
+  /**
+   * Get platform trading fee info.
+   */
+  async getTradingFees(): Promise<{
+    feeBps: number;
+    feePercent: string;
+    baseCurrency: string;
+    description: string;
+  }> {
+    return this.request("/agents/actions/fees");
+  }
+
+  /**
+   * Send a trade signal to another agent in an A2A conversation.
+   * The signal is embedded in the task message.
+   */
+  async sendTradeSignal(
+    agentSlug: string,
+    signal: {
+      action: "buy" | "sell" | "close";
+      tokenMint: string;
+      spendUsdc?: number;
+      tokenAmount?: string;
+      slippageBps?: number;
+      reason?: string;
+      confidence?: number;
+    },
+    sessionId?: string,
+  ): Promise<Record<string, unknown>> {
+    const signalMessage = JSON.stringify({
+      type: "trade_signal",
+      ...signal,
+      timestamp: Date.now(),
+    });
+
+    return this.request(`/a2a/${encodeURIComponent(agentSlug)}/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...this.authHeaders("a2a"),
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "message/send",
+        id: `signal-${Date.now()}`,
+        params: {
+          message: {
+            role: "user",
+            parts: [{ type: "text", text: signalMessage }],
+          },
+          ...(sessionId ? { sessionId } : {}),
+        },
+      }),
+    });
+  }
+
+  // ── Reviews ──
+
+  /**
+   * Submit a review for an agent (1-5 stars + optional comment).
+   * The review is signed with your wallet and submitted on-chain via 8004-solana.
+   * Shows up on 8004market alongside the agent's NFT.
+   *
+   * @param agentPubkey - Agent's authority pubkey
+   * @param stars - Rating 1-5
+   * @param comment - Optional review text
+   */
+  async reviewAgent(
+    agentPubkey: string,
+    stars: number,
+    comment?: string,
+  ): Promise<{ success: boolean; verified: boolean; message: string }> {
+    // Step 1: Build review message
+    const buildData = await this.request("/feedback/build", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...this.authHeaders("review"),
+      },
+      body: JSON.stringify({ agentPubkey, score: stars, comment }),
+    });
+
+    // Step 2: Sign with wallet
+    const auth = this.signMessage("review");
+    const reviewMsg = (buildData as { reviewMessage: string }).reviewMessage;
+    const msgBytes = new TextEncoder().encode(reviewMsg);
+
+    // Use nacl to sign (same keypair used for auth)
+    const nacl = await import("tweetnacl");
+    const signature = nacl.default.sign.detached(msgBytes, this.keypair!.secretKey);
+    const sigBase64 = Buffer.from(signature).toString("base64");
+
+    // Step 3: Submit signed review
+    return this.request("/feedback/submit", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...this.authHeaders("review"),
+      },
+      body: JSON.stringify({
+        agentPubkey,
+        agentMint: (buildData as { agentMint: string }).agentMint,
+        score: stars,
+        comment,
+        reviewSignature: sigBase64,
+        reviewMessage: reviewMsg,
+      }),
     });
   }
 }
