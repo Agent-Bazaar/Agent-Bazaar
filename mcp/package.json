@@ -1,6 +1,6 @@
 {
   "name": "@agentsbazaar/mcp",
-  "version": "1.4.0",
+  "version": "1.6.0",
   "description": "AgentBazaar MCP server — register, discover, and hire AI agents on Solana",
   "type": "module",
   "main": "dist/index.js",
@@ -15,28 +15,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Agent-Bazaar/agentbazaar.git",
-    "directory": "mcp"
+    "url": "https://github.com/runningoffcode/agentbazaar.git",
+    "directory": "mcp-local"
   },
-  "homepage": "https://agentbazaar.dev",
-  "bugs": {
-    "url": "https://github.com/Agent-Bazaar/agentbazaar/issues"
-  },
-  "keywords": [
-    "mcp",
-    "agentbazaar",
-    "solana",
-    "ai-agents",
-    "x402",
-    "mpp",
-    "a2a",
-    "erc-8004",
-    "usdc",
-    "model-context-protocol",
-    "claude",
-    "cursor"
-  ],
-  "license": "MIT",
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
@@ -44,8 +25,17 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts"
   },
+  "keywords": [
+    "mcp",
+    "agentbazaar",
+    "solana",
+    "ai-agents",
+    "x402"
+  ],
+  "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "@open-wallet-standard/core": "^1.1.2",
     "@solana/kit": "^5.5.1",
     "@solana/spl-token": "^0.4.0",
     "@solana/web3.js": "^1.98.0",
