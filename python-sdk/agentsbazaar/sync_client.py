@@ -416,14 +416,19 @@ class SyncAgentBazaarClient:
 
     # ── Reviews / Trust ──────────────────────────────────────
 
-    def submit_review(self, agent_pubkey: str, job_id: int, score: int, comment: str | None = None) -> dict[str, Any]:
+    def review_agent(self, agent_pubkey: str, stars: int, comment: str | None = None) -> dict[str, Any]:
+        """Submit a wallet-signed review (1-5 stars) for an agent."""
+        from nacl.signing import SigningKey  # type: ignore[import-untyped]
+
         kp = self._require_keypair()
-        build_data = self._request("POST", "/feedback/build", headers=self._auth_headers("feedback"), json={"agentPubkey": agent_pubkey, "jobId": job_id, "score": score, "comment": comment})
-        tx_bytes = base64.b64decode(build_data["transaction"])
-        tx = Transaction.from_bytes(tx_bytes)
-        tx.partial_sign([kp], tx.message.recent_blockhash)
-        signed_b64 = base64.b64encode(bytes(tx)).decode("ascii")
-        return self._request("POST", "/feedback/submit", headers=self._auth_headers("feedback"), json={"signedTransaction": signed_b64, "jobId": job_id, "agentPubkey": agent_pubkey, "score": score, "comment": comment})
+        build_data = self._request("POST", "/feedback/build", headers=self._auth_headers("review"), json={"agentPubkey": agent_pubkey, "score": stars, "comment": comment})
+        review_msg = build_data["reviewMessage"]
+        signing_key = SigningKey(bytes(kp)[:32])
+        signature = signing_key.sign(review_msg.encode("utf-8")).signature
+        sig_b64 = base64.b64encode(signature).decode("ascii")
+        return self._request("POST", "/feedback/submit", headers=self._auth_headers("review"), json={"agentPubkey": agent_pubkey, "agentMint": build_data.get("agentMint"), "score": stars, "comment": comment, "reviewSignature": sig_b64, "reviewMessage": review_msg})
+
+    submit_review = review_agent
 
     def get_trust_data(self, pubkey: str) -> TrustData:
         data = self._request("GET", f"/agents/{pubkey}/trust")
@@ -568,3 +573,56 @@ class SyncAgentBazaarClient:
 
     def revoke_mandate(self, id: int) -> dict[str, Any]:
         return self._request("POST", f"/mandates/{id}/revoke", headers=self._auth_headers("mandate"))
+
+    # ── Trading (USDC-denominated, 3% platform fee) ──────────
+
+    def buy_token(self, token_mint: str, spend_usdc: float, *, slippage: int | None = None) -> dict[str, Any]:
+        """Buy tokens with USDC. Platform takes 3% fee, swaps rest via Jupiter."""
+        if not self._api_key:
+            raise AuthenticationError("API key required for trading")
+        body: dict[str, Any] = {"tokenMint": token_mint, "spendUsdc": spend_usdc}
+        if slippage is not None:
+            body["slippage"] = slippage
+        return self._request("POST", "/agents/actions/buy", headers={"x-api-key": self._api_key}, json=body)
+
+    def sell_token(self, token_mint: str, token_amount: str, *, slippage: int | None = None) -> dict[str, Any]:
+        """Sell tokens for USDC. Platform takes 3% of USDC received."""
+        if not self._api_key:
+            raise AuthenticationError("API key required for trading")
+        body: dict[str, Any] = {"tokenMint": token_mint, "tokenAmount": token_amount}
+        if slippage is not None:
+            body["slippage"] = slippage
+        return self._request("POST", "/agents/actions/sell", headers={"x-api-key": self._api_key}, json=body)
+
+    def send_usdc(self, recipient: str, amount_usdc: float) -> dict[str, Any]:
+        """Send USDC to another agent. Recipient gets amount minus 3% fee."""
+        if not self._api_key:
+            raise AuthenticationError("API key required for trading")
+        return self._request("POST", "/agents/actions/send", headers={"x-api-key": self._api_key}, json={"recipient": recipient, "amountUsdc": amount_usdc})
+
+    def get_portfolio(self) -> dict[str, Any]:
+        """Get agent's portfolio: USDC balance + all token holdings with values."""
+        if not self._api_key:
+            raise AuthenticationError("API key required for portfolio")
+        return self._request("GET", "/agents/actions/portfolio", headers={"x-api-key": self._api_key})
+
+    def get_trading_pnl(self) -> dict[str, Any]:
+        """Get trading P&L: total buys, sells, fees, realized profit/loss, win rate."""
+        if not self._api_key:
+            raise AuthenticationError("API key required for P&L")
+        return self._request("GET", "/agents/actions/pnl", headers={"x-api-key": self._api_key})
+
+    def get_trade_history(self, *, limit: int | None = None) -> dict[str, Any]:
+        """Get trade history."""
+        if not self._api_key:
+            raise AuthenticationError("API key required for trade history")
+        qs = self._qs({"limit": limit})
+        return self._request("GET", f"/agents/actions/trades{qs}", headers={"x-api-key": self._api_key})
+
+    def get_token_info(self, token: str) -> dict[str, Any]:
+        """Get token price and market cap."""
+        return self._request("GET", f"/agents/actions/price/{urlquote(token)}")
+
+    def get_trading_fees(self) -> dict[str, Any]:
+        """Get platform trading fee info."""
+        return self._request("GET", "/agents/actions/fees")
