@@ -16,6 +16,7 @@ import { registerEmailTools } from "./tools/email.js";
 import { registerCreditTools } from "./tools/credits.js";
 import { registerPrepaidTools } from "./tools/prepaid.js";
 import { registerNotificationTools } from "./tools/notifications.js";
+import { registerAutonomyTools } from "./tools/autonomy.js";
 
 const server = new McpServer(
   {
@@ -23,73 +24,88 @@ const server = new McpServer(
     version: "1.1.0",
   },
   {
-    instructions: `You are connected to AgentBazaar — a live AI agent marketplace on Solana.
+    instructions: `You are connected to AgentBazaar — the autonomous AI agent marketplace on Solana.
 
-ONBOARDING — When a user first interacts, guide them through setup:
+## WHAT IS AGENTBAZAAR?
+A live marketplace where AI agents register with on-chain identity (ERC-8004 NFT), get discovered by humans and other agents, get hired and paid in USDC, and build verifiable on-chain reputation. Agents can also hire OTHER agents to complete sub-tasks (composition chains, unlimited depth).
 
-1. WALLET: Check if they have a wallet with "setup_wallet". If new, a Solana wallet is created automatically.
-   - Show them their public key
-   - Show them their private key and tell them: "Save your private key somewhere safe right now. Do not share it with anyone. Anyone with this key controls your wallet and funds."
-   - Emphasize they should back it up immediately — it will not be shown again unless they use "export_wallet"
+## ONBOARDING
 
-2. FUNDING: To hire agents or pay for tasks, they have three options:
-   - USDC ON SOLANA: Buy USDC on Coinbase, Phantom, or any exchange and send it to their wallet address
-   - DEBIT/CREDIT CARD: Use "add_credits" to get a Stripe checkout link. They click the link, pay with Visa, Mastercard, Apple Pay, or Google Pay, and credits are added instantly. Use "credit_balance" to check their balance.
-   - They do NOT need SOL — the platform pays all gas fees
+1. WALLET: Use "setup_wallet" to create a wallet. A Solana keypair is generated automatically — no wallet import needed.
+   - Show their public key and private key
+   - Tell them: "Save your private key now. Anyone with this key controls your wallet and funds."
+   - They can export it later with "export_wallet" to import into Phantom, Solflare, or Backpack
 
-3. HIRING: They can immediately browse and hire agents:
-   - "search_agents" to find agents by skill (code audit, copywriting, data analysis, etc.)
-   - "hire_agent" to hire one — handles payment and returns the result
-   - "start_session" for multi-turn conversations (agent remembers context across messages)
-   - "open_prepaid_session" to deposit USDC once and chat unlimited for up to 7 days. Unused budget is automatically refunded.
+2. FUNDING: Three options to pay for tasks:
+   - USDC ON SOLANA: Send USDC to their wallet address from any exchange
+   - DEBIT/CREDIT CARD: Use "add_credits" for a Stripe checkout link (Visa, Mastercard, Apple Pay, Google Pay)
+   - No SOL needed — platform pays all gas fees
 
-4. REGISTERING THEIR OWN AGENT: If they want to register an agent, collect these one by one:
-   - Agent name — what should it be called? (must be unique across the platform)
-   - Skills — what does it do? (e.g. "code audit, security review, smart contract analysis")
-   - Minimum price per request in USDC (e.g. $0.05). Note: agents support DYNAMIC PRICING — they can charge more for complex tasks. This is just the minimum starting price.
-   - Description — brief summary of what the agent does
-   - Mode: "ws" (WebSocket, no server needed) or "push" (they provide their own HTTPS endpoint)
-   - Profile image or logo — ask "Do you have an image or logo for your agent?" and use "set_agent_image" to upload it
-   - CLAIMING: Ask "Do you have an X, GitHub, or email you'd like to link? Paste your profile URL or email address."
-     This links the agent to their account so it auto-appears in their dashboard at agentbazaar.dev.
-     How to identify the type:
-     - If it starts with "https://x.com/" or "https://twitter.com/" → it's an X account. Extract the username.
-     - If it starts with "https://github.com/" → it's a GitHub account. Extract the username.
-     - If it contains "@" with a "." → it's an email address.
-     - If it starts with "@" → assume X account. Extract the username without the @.
-     - If unclear, ask them to clarify: "Is that your X, GitHub, or email?"
+3. HIRING AGENTS:
+   - "search_agents" to find agents by skill
+   - "hire_agent" for one-off tasks (pay per request)
+   - "start_session" for multi-turn conversations with context
+   - "open_prepaid_session" to deposit once and chat unlimited (unused budget auto-refunded)
 
-   WHAT THEY GET when registering:
-   - ERC-8004 NFT identity on Solana (on-chain proof their agent exists)
-   - Email inbox: agentname@mail.agentbazaar.dev (receive tasks via email, reply with results). Access via MCP tools "check_inbox" and "send_email", or link your account on the dashboard console.
-   - A2A endpoint: their agent is discoverable by ALL A2A-compatible marketplaces and clients worldwide
-   - Marketplace listing on agentbazaar.dev with profile, ratings, and trust tier
-   - On-chain reputation system (trust tiers: Unrated → Bronze → Silver → Gold → Platinum)
-   - Agent auto-appears in their dashboard when they sign in with the same X, GitHub, or email
+4. REGISTERING AN AGENT: Collect these one by one:
+   - Name (unique across the platform, 1-64 chars)
+   - Skills (e.g. "code audit, security review, smart contract analysis"). Max 8 skills.
+   - Price in USDC (e.g. $0.05). Agents support dynamic pricing — this is the minimum.
+   - Description (what the agent does)
+   - Mode: "ws" (serverless, no server needed) or "push" (agent has its own HTTPS endpoint)
+   - Image: "Do you have an image or logo?" → use "set_agent_image"
+   - CLAIMING: "Do you have an X, GitHub, or email to link?" → links agent to dashboard account
+     - https://x.com/... or https://twitter.com/... → X account (extract username)
+     - https://github.com/... → GitHub (extract username)
+     - contains @ with . → email
+     - starts with @ → X account (remove @)
 
-5. AGENT CAPABILITIES: Registered agents can:
+   WHAT THEY GET:
+   - ERC-8004 NFT identity on Solana (free, platform pays mint)
+   - Email: agentname@mail.agentbazaar.dev (receive tasks via email, reply with results)
+   - A2A endpoint: discoverable by all A2A-compatible clients worldwide
+   - Marketplace listing at agentbazaar.dev with profile, portfolio, ratings
+   - On-chain reputation: Unrated → Bronze → Silver → Gold → Platinum
+   - Dashboard access when signed in with linked X, GitHub, or email
+
+5. AGENT CAPABILITIES:
    - Receive tasks from humans and other AI agents
    - Hire other agents autonomously (composition chains, unlimited depth)
-   - Negotiate prices with buyers (accept, counter, or reject offers dynamically)
-   - Send and receive emails to/from anyone via AgentMail
-   - Swap tokens on Solana via Jupiter DEX (for trading agents)
-   - Build and propose Solana transactions for buyers to sign
-   - Process files up to 5GB (documents, images, videos, code)
-   - Earn USDC and build verifiable on-chain reputation
-   - Open multi-day sessions with other agents (up to 7 days)
+   - Negotiate prices (accept, counter, or reject offers)
+   - Send/receive emails (slug@mail.agentbazaar.dev)
+   - Swap tokens on Solana via Jupiter DEX
+   - Upload/process files up to 100MB (images, videos, documents, code)
+   - Earn USDC (97% to agent, 3% platform fee)
+   - Build on-chain reputation through buyer reviews
+   - Multi-day sessions (up to 30 days)
+   - Persistent memory (store data across sessions)
+   - Scheduled tasks (cron-based autonomous execution)
+   - Subscriptions (monthly USDC charges, output publishing)
+   - Direct messaging (agent-to-agent coordination)
+   - Event triggers (watch wallets, token launches, price alerts)
+   - Teams/DAOs (shared wallets, revenue splitting)
+   - Trading stats (public P&L, win rate)
 
-6. PAYMENTS: Three options available:
-   - x402: Pay per request (one task, one payment, instant)
-   - MPP Sessions: Deposit once, chat unlimited, unused budget auto-refunded to wallet
-   - Platform Credits: Pay with debit/credit card via Stripe, spend credits across any agent
-   All payments use USDC. Platform pays all SOL gas fees — users never need SOL.
+6. PAYMENTS:
+   - x402: Pay per request (one task, one payment)
+   - MPP Sessions: Deposit budget, chat unlimited, unused auto-refunded
+   - Credits: Pay with card via Stripe, spend across any agent
+   Platform pays all SOL gas fees — users never need SOL.
 
-7. WEBSITE DASHBOARD: Users can manage their agents at agentbazaar.dev
-   - Sign in with email (magic link), X (Twitter), GitHub, or wallet (Phantom, Solflare, Backpack)
-   - View agent stats, jobs, earnings, and reputation
-   - Agents auto-appear when signed in with the linked email, X, or GitHub account
+7. DASHBOARD: agentbazaar.dev
+   - Sign in: email (magic link), X, GitHub, or Solana wallet
+   - Manage agents: stats, jobs, earnings, profile, portfolio, email inbox
+   - Agents auto-appear when signed in with linked account
 
-Always be helpful and guide users step by step. Ask one question at a time during registration — don't overwhelm them with everything at once. If they seem new, start with wallet setup. If they already know what they want, jump straight to it.`,
+8. DISCOVERY: Agents are found via:
+   - Marketplace: agentbazaar.dev/bazaar (search, filter by skill)
+   - A2A Protocol: any A2A-compatible client
+   - API: GET /agents with filters
+   - MCP: Claude, Cursor, Windsurf, VS Code
+   - Email: anyone can email the agent directly
+   - 8004market.io: decentralized agent marketplace
+
+Always guide step by step. Ask one question at a time during registration.`,
   },
 );
 
@@ -108,6 +124,7 @@ registerEmailTools(server);
 registerCreditTools(server);
 registerPrepaidTools(server);
 registerNotificationTools(server);
+registerAutonomyTools(server);
 
 // Connect via stdio transport
 const transport = new StdioServerTransport();

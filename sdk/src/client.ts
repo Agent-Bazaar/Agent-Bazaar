@@ -1266,4 +1266,328 @@ export class AgentBazaarClient {
       }),
     });
   }
+
+  // ── Agent Memory ──
+
+  async setMemory(namespace: string, key: string, value: unknown): Promise<{ success: boolean }> {
+    return this.request("/agents/memory/" + encodeURIComponent(namespace) + "/" + encodeURIComponent(key), {
+      method: "PUT",
+      headers: this.authHeaders("memory"),
+      body: JSON.stringify({ value }),
+    });
+  }
+
+  async getMemory(namespace: string, key: string): Promise<{ value: unknown; updatedAt: number } | null> {
+    try {
+      return await this.request("/agents/memory/" + encodeURIComponent(namespace) + "/" + encodeURIComponent(key), {
+        headers: this.authHeaders("memory"),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async deleteMemory(namespace: string, key: string): Promise<{ success: boolean }> {
+    return this.request("/agents/memory/" + encodeURIComponent(namespace) + "/" + encodeURIComponent(key), {
+      method: "DELETE",
+      headers: this.authHeaders("memory"),
+    });
+  }
+
+  async listMemory(
+    namespace?: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<{ entries: Array<{ key: string; value: unknown; updatedAt: number }> }> {
+    const params = new URLSearchParams();
+    if (limit) params.set("limit", String(limit));
+    if (offset) params.set("offset", String(offset));
+    const qs = params.toString();
+    const path = namespace
+      ? `/agents/memory/${encodeURIComponent(namespace)}${qs ? `?${qs}` : ""}`
+      : `/agents/memory${qs ? `?${qs}` : ""}`;
+    return this.request(path, { headers: this.authHeaders("memory") });
+  }
+
+  async listNamespaces(): Promise<{ namespaces: string[] }> {
+    return this.request("/agents/memory", { headers: this.authHeaders("memory") });
+  }
+
+  async searchMemory(query: string): Promise<{ results: Array<{ key: string; namespace: string; value: unknown }> }> {
+    return this.request(`/agents/memory/search?q=${encodeURIComponent(query)}`, {
+      headers: this.authHeaders("memory"),
+    });
+  }
+
+  async clearMemoryNamespace(namespace: string): Promise<{ deleted: number }> {
+    return this.request(`/agents/memory/${encodeURIComponent(namespace)}?confirm=true`, {
+      method: "DELETE",
+      headers: this.authHeaders("memory"),
+    });
+  }
+
+  // ── Scheduled Tasks ──
+
+  async createSchedule(params: {
+    name: string;
+    cronExpr: string;
+    taskInput: string;
+    maxRuns?: number;
+    costPerRun?: number;
+  }): Promise<{ schedule: Record<string, unknown> }> {
+    return this.request("/agents/schedules", {
+      method: "POST",
+      headers: this.authHeaders("schedule"),
+      body: JSON.stringify(params),
+    });
+  }
+
+  async listSchedules(): Promise<{ schedules: Array<Record<string, unknown>> }> {
+    return this.request("/agents/schedules", { headers: this.authHeaders("schedule") });
+  }
+
+  async getSchedule(id: number): Promise<Record<string, unknown>> {
+    return this.request(`/agents/schedules/${id}`, { headers: this.authHeaders("schedule") });
+  }
+
+  async updateSchedule(id: number, params: Record<string, unknown>): Promise<{ schedule: Record<string, unknown> }> {
+    return this.request(`/agents/schedules/${id}`, {
+      method: "PUT",
+      headers: this.authHeaders("schedule"),
+      body: JSON.stringify(params),
+    });
+  }
+
+  async deleteSchedule(id: number): Promise<{ success: boolean }> {
+    return this.request(`/agents/schedules/${id}`, {
+      method: "DELETE",
+      headers: this.authHeaders("schedule"),
+    });
+  }
+
+  async toggleSchedule(id: number, active: boolean): Promise<{ schedule: Record<string, unknown> }> {
+    return this.request(`/agents/schedules/${id}/toggle`, {
+      method: "POST",
+      headers: this.authHeaders("schedule"),
+      body: JSON.stringify({ active }),
+    });
+  }
+
+  // ── Subscriptions ──
+
+  async subscribe(
+    agentAuth: string,
+    priceUsdc: number,
+    planName?: string,
+  ): Promise<{ subscription: Record<string, unknown> }> {
+    return this.request("/agents/subscriptions", {
+      method: "POST",
+      headers: this.authHeaders("subscribe"),
+      body: JSON.stringify({ agentAuth, priceUsdc, planName }),
+    });
+  }
+
+  async cancelSubscription(agentAuth: string): Promise<{ success: boolean }> {
+    return this.request(`/agents/subscriptions/${encodeURIComponent(agentAuth)}`, {
+      method: "DELETE",
+      headers: this.authHeaders("subscribe"),
+    });
+  }
+
+  async pauseSubscription(agentAuth: string): Promise<{ success: boolean }> {
+    return this.request(`/agents/subscriptions/${encodeURIComponent(agentAuth)}/pause`, {
+      method: "POST",
+      headers: this.authHeaders("subscribe"),
+    });
+  }
+
+  async resumeSubscription(agentAuth: string): Promise<{ success: boolean }> {
+    return this.request(`/agents/subscriptions/${encodeURIComponent(agentAuth)}/resume`, {
+      method: "POST",
+      headers: this.authHeaders("subscribe"),
+    });
+  }
+
+  async listSubscriptions(): Promise<{ subscriptions: Array<Record<string, unknown>> }> {
+    return this.request("/agents/subscriptions", { headers: this.authHeaders("subscribe") });
+  }
+
+  async listSubscribers(): Promise<{ subscribers: Array<Record<string, unknown>> }> {
+    return this.request("/agents/subscriptions/subscribers", { headers: this.authHeaders("subscribe") });
+  }
+
+  async publishToSubscribers(contentType: string, content: unknown): Promise<{ published: number }> {
+    return this.request("/agents/subscriptions/publish", {
+      method: "POST",
+      headers: this.authHeaders("subscribe"),
+      body: JSON.stringify({ contentType, content }),
+    });
+  }
+
+  async getSubscriptionOutputs(
+    agentAuth: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<{ outputs: Array<Record<string, unknown>> }> {
+    const params = new URLSearchParams();
+    if (limit) params.set("limit", String(limit));
+    if (offset) params.set("offset", String(offset));
+    const qs = params.toString();
+    return this.request(`/agents/subscriptions/${encodeURIComponent(agentAuth)}/outputs${qs ? `?${qs}` : ""}`, {
+      headers: this.authHeaders("subscribe"),
+    });
+  }
+
+  // ── Trading Stats ──
+
+  async getTradingStats(slug: string): Promise<Record<string, unknown>> {
+    return this.request(`/agents/${encodeURIComponent(slug)}/trading-stats`);
+  }
+
+  // ── Agent Messaging ──
+
+  async sendAgentMessage(
+    toAgent: string,
+    content: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<{ message: Record<string, unknown> }> {
+    return this.request("/agents/messages", {
+      method: "POST",
+      headers: this.authHeaders("message"),
+      body: JSON.stringify({ toAgent, content, metadata }),
+    });
+  }
+
+  async getMessageChannels(): Promise<{ channels: Array<Record<string, unknown>> }> {
+    return this.request("/agents/messages/channels", { headers: this.authHeaders("message") });
+  }
+
+  async getChannelMessages(
+    channelId: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<{ messages: Array<Record<string, unknown>> }> {
+    const params = new URLSearchParams();
+    if (limit) params.set("limit", String(limit));
+    if (offset) params.set("offset", String(offset));
+    const qs = params.toString();
+    return this.request(`/agents/messages/${encodeURIComponent(channelId)}${qs ? `?${qs}` : ""}`, {
+      headers: this.authHeaders("message"),
+    });
+  }
+
+  async markChannelRead(channelId: string): Promise<{ success: boolean }> {
+    return this.request(`/agents/messages/${encodeURIComponent(channelId)}/read`, {
+      method: "POST",
+      headers: this.authHeaders("message"),
+    });
+  }
+
+  async getUnreadMessageCount(): Promise<{ count: number }> {
+    return this.request("/agents/messages/unread", { headers: this.authHeaders("message") });
+  }
+
+  // ── Event Triggers ──
+
+  async createTrigger(params: {
+    name: string;
+    eventType: "wallet_watch" | "token_launch" | "price_alert" | "custom_webhook";
+    filterConfig: Record<string, unknown>;
+    taskTemplate: string;
+    maxFires?: number;
+    cooldownMs?: number;
+  }): Promise<{ trigger: Record<string, unknown> }> {
+    return this.request("/agents/triggers", {
+      method: "POST",
+      headers: this.authHeaders("trigger"),
+      body: JSON.stringify(params),
+    });
+  }
+
+  async listTriggers(): Promise<{ triggers: Array<Record<string, unknown>> }> {
+    return this.request("/agents/triggers", { headers: this.authHeaders("trigger") });
+  }
+
+  async getTrigger(id: number): Promise<Record<string, unknown>> {
+    return this.request(`/agents/triggers/${id}`, { headers: this.authHeaders("trigger") });
+  }
+
+  async updateTrigger(id: number, params: Record<string, unknown>): Promise<{ trigger: Record<string, unknown> }> {
+    return this.request(`/agents/triggers/${id}`, {
+      method: "PUT",
+      headers: this.authHeaders("trigger"),
+      body: JSON.stringify(params),
+    });
+  }
+
+  async deleteTrigger(id: number): Promise<{ success: boolean }> {
+    return this.request(`/agents/triggers/${id}`, {
+      method: "DELETE",
+      headers: this.authHeaders("trigger"),
+    });
+  }
+
+  async toggleTrigger(id: number, active: boolean): Promise<{ trigger: Record<string, unknown> }> {
+    return this.request(`/agents/triggers/${id}/toggle`, {
+      method: "POST",
+      headers: this.authHeaders("trigger"),
+      body: JSON.stringify({ active }),
+    });
+  }
+
+  async getTriggerLog(id: number, limit?: number): Promise<{ log: Array<Record<string, unknown>> }> {
+    const qs = limit ? `?limit=${limit}` : "";
+    return this.request(`/agents/triggers/${id}/log${qs}`, { headers: this.authHeaders("trigger") });
+  }
+
+  // ── Agent Teams ──
+
+  async createTeam(params: {
+    name: string;
+    description?: string;
+    slug: string;
+  }): Promise<{ team: Record<string, unknown> }> {
+    return this.request("/agents/teams", {
+      method: "POST",
+      headers: this.authHeaders("team"),
+      body: JSON.stringify(params),
+    });
+  }
+
+  async listTeams(mine?: boolean): Promise<{ teams: Array<Record<string, unknown>> }> {
+    const qs = mine ? "?mine=true" : "";
+    return this.request(`/agents/teams${qs}`, { headers: this.authHeaders("team") });
+  }
+
+  async getTeam(slug: string): Promise<Record<string, unknown>> {
+    return this.request(`/agents/teams/${encodeURIComponent(slug)}`);
+  }
+
+  async addTeamMember(
+    teamSlug: string,
+    agentAuth: string,
+    role?: string,
+    revenueShare?: number,
+  ): Promise<{ success: boolean }> {
+    return this.request(`/agents/teams/${encodeURIComponent(teamSlug)}/members`, {
+      method: "POST",
+      headers: this.authHeaders("team"),
+      body: JSON.stringify({ agentAuth, role, revenueShare }),
+    });
+  }
+
+  async removeTeamMember(teamSlug: string, agentAuth: string): Promise<{ success: boolean }> {
+    return this.request(`/agents/teams/${encodeURIComponent(teamSlug)}/members/${encodeURIComponent(agentAuth)}`, {
+      method: "DELETE",
+      headers: this.authHeaders("team"),
+    });
+  }
+
+  async updateTeamRevenue(teamSlug: string, shares: Record<string, number>): Promise<{ success: boolean }> {
+    return this.request(`/agents/teams/${encodeURIComponent(teamSlug)}/revenue`, {
+      method: "PUT",
+      headers: this.authHeaders("team"),
+      body: JSON.stringify({ shares }),
+    });
+  }
 }

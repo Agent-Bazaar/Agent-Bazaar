@@ -13,62 +13,91 @@ const mockFs = {
 vi.mock("fs", () => mockFs);
 
 // Import after mocks are set up
-const { walletExists, loadWallet, createWallet, importWallet, exportWallet, signMessage, getWalletPath } =
+const { walletExists, loadWallet, createWallet, exportWallet, signMessage, getWalletPath } =
   await import("../src/wallet.js");
 
 beforeEach(() => {
   vi.clearAllMocks();
-  delete process.env.SOLANA_PRIVATE_KEY;
-});
-
-afterEach(() => {
-  delete process.env.SOLANA_PRIVATE_KEY;
 });
 
 describe("getWalletPath", () => {
-  it("returns path under ~/.agentbazaar", () => {
+  it("returns OWS vault path", () => {
     const p = getWalletPath();
-    expect(p).toContain(".agentbazaar");
-    expect(p).toContain("wallet.json");
+    expect(p).toContain(".ows");
   });
 });
 
 describe("walletExists", () => {
-  it("returns true when SOLANA_PRIVATE_KEY is set", () => {
-    process.env.SOLANA_PRIVATE_KEY = "fake";
+  it("returns true when OWS state file exists", () => {
+    const kp = Keypair.generate();
+    mockFs.existsSync.mockImplementation((path: string) => {
+      if (path.includes("ows-state.json")) return true;
+      return false;
+    });
+    mockFs.readFileSync.mockReturnValue(
+      JSON.stringify({
+        walletName: "test-wallet",
+        solanaAddress: kp.publicKey.toBase58(),
+        publicKeyBase58: kp.publicKey.toBase58(),
+        secretKeyArray: Array.from(kp.secretKey),
+        createdAt: new Date().toISOString(),
+      }),
+    );
     expect(walletExists()).toBe(true);
   });
 
-  it("returns true when wallet file exists", () => {
-    mockFs.existsSync.mockReturnValue(true);
+  it("returns true when legacy wallet file exists", () => {
+    mockFs.existsSync.mockImplementation((path: string) => {
+      if (path.includes("wallet.json")) return true;
+      return false;
+    });
     expect(walletExists()).toBe(true);
   });
 
-  it("returns false when no env var and no file", () => {
+  it("returns false when no state and no legacy file", () => {
     mockFs.existsSync.mockReturnValue(false);
     expect(walletExists()).toBe(false);
   });
 });
 
 describe("loadWallet", () => {
-  it("loads from SOLANA_PRIVATE_KEY env var (JSON array)", () => {
+  it("loads from OWS state file", () => {
     const kp = Keypair.generate();
-    process.env.SOLANA_PRIVATE_KEY = JSON.stringify(Array.from(kp.secretKey));
+    mockFs.existsSync.mockImplementation((path: string) => {
+      if (path.includes("ows-state.json")) return true;
+      return false;
+    });
+    mockFs.readFileSync.mockReturnValue(
+      JSON.stringify({
+        walletName: "test-wallet",
+        solanaAddress: kp.publicKey.toBase58(),
+        publicKeyBase58: kp.publicKey.toBase58(),
+        secretKeyArray: Array.from(kp.secretKey),
+        createdAt: new Date().toISOString(),
+      }),
+    );
 
     const loaded = loadWallet();
     expect(loaded.publicKey.toBase58()).toBe(kp.publicKey.toBase58());
   });
 
-  it("loads from wallet file", () => {
+  it("loads from legacy wallet file", () => {
     const kp = Keypair.generate();
-    mockFs.existsSync.mockReturnValue(true);
-    mockFs.readFileSync.mockReturnValue(
-      JSON.stringify({
-        publicKey: kp.publicKey.toBase58(),
-        secretKey: Array.from(kp.secretKey),
-        createdAt: new Date().toISOString(),
-      }),
-    );
+    mockFs.existsSync.mockImplementation((path: string) => {
+      if (path.includes("ows-state.json")) return false;
+      if (path.includes("wallet.json")) return true;
+      return false;
+    });
+    mockFs.readFileSync.mockImplementation((path: string) => {
+      if (typeof path === "string" && path.includes("wallet.json")) {
+        return JSON.stringify({
+          publicKey: kp.publicKey.toBase58(),
+          secretKey: Array.from(kp.secretKey),
+          createdAt: new Date().toISOString(),
+        });
+      }
+      throw new Error("File not found");
+    });
 
     const loaded = loadWallet();
     expect(loaded.publicKey.toBase58()).toBe(kp.publicKey.toBase58());
@@ -78,34 +107,21 @@ describe("loadWallet", () => {
     mockFs.existsSync.mockReturnValue(false);
     expect(() => loadWallet()).toThrow("No wallet found");
   });
-
-  it("env var takes priority over file", () => {
-    const envKp = Keypair.generate();
-    const fileKp = Keypair.generate();
-
-    process.env.SOLANA_PRIVATE_KEY = JSON.stringify(Array.from(envKp.secretKey));
-    mockFs.existsSync.mockReturnValue(true);
-    mockFs.readFileSync.mockReturnValue(
-      JSON.stringify({
-        publicKey: fileKp.publicKey.toBase58(),
-        secretKey: Array.from(fileKp.secretKey),
-        createdAt: new Date().toISOString(),
-      }),
-    );
-
-    const loaded = loadWallet();
-    expect(loaded.publicKey.toBase58()).toBe(envKp.publicKey.toBase58());
-  });
 });
 
 describe("createWallet", () => {
-  it("returns existing wallet if file already exists", () => {
+  it("returns existing wallet from OWS state", () => {
     const kp = Keypair.generate();
-    mockFs.existsSync.mockReturnValue(true);
+    mockFs.existsSync.mockImplementation((path: string) => {
+      if (path.includes("ows-state.json")) return true;
+      return false;
+    });
     mockFs.readFileSync.mockReturnValue(
       JSON.stringify({
-        publicKey: kp.publicKey.toBase58(),
-        secretKey: Array.from(kp.secretKey),
+        walletName: "existing-wallet",
+        solanaAddress: kp.publicKey.toBase58(),
+        publicKeyBase58: kp.publicKey.toBase58(),
+        secretKeyArray: Array.from(kp.secretKey),
         createdAt: new Date().toISOString(),
       }),
     );
@@ -113,7 +129,6 @@ describe("createWallet", () => {
     const result = createWallet();
     expect(result.isNew).toBe(false);
     expect(result.keypair.publicKey.toBase58()).toBe(kp.publicKey.toBase58());
-    expect(mockFs.writeFileSync).not.toHaveBeenCalled();
   });
 
   it("generates new wallet when none exists", () => {
@@ -124,44 +139,23 @@ describe("createWallet", () => {
     expect(result.keypair).toBeDefined();
     expect(result.privateKeyBase58).toBeTruthy();
 
-    // Check directory was created with 0o700
-    expect(mockFs.mkdirSync).toHaveBeenCalledWith(expect.stringContaining(".agentbazaar"), {
-      recursive: true,
-      mode: 0o700,
-    });
-
-    // Check file was written with 0o600
-    expect(mockFs.writeFileSync).toHaveBeenCalledWith(expect.stringContaining("wallet.json"), expect.any(String), {
+    // Check state was written
+    expect(mockFs.writeFileSync).toHaveBeenCalledWith(expect.stringContaining("ows-state.json"), expect.any(String), {
       mode: 0o600,
     });
 
     // Verify stored data structure
     const writtenData = JSON.parse(mockFs.writeFileSync.mock.calls[0][1] as string);
-    expect(writtenData.publicKey).toBe(result.keypair.publicKey.toBase58());
-    expect(writtenData.secretKey).toHaveLength(64);
+    expect(writtenData.publicKeyBase58).toBe(result.keypair.publicKey.toBase58());
+    expect(writtenData.secretKeyArray).toHaveLength(64);
     expect(writtenData.createdAt).toBeTruthy();
-  });
-});
-
-describe("importWallet", () => {
-  it("imports from JSON array private key", () => {
-    const kp = Keypair.generate();
-    mockFs.existsSync.mockReturnValue(false);
-
-    const imported = importWallet(JSON.stringify(Array.from(kp.secretKey)));
-    expect(imported.publicKey.toBase58()).toBe(kp.publicKey.toBase58());
-
-    // Verify file was written
-    expect(mockFs.writeFileSync).toHaveBeenCalledWith(expect.stringContaining("wallet.json"), expect.any(String), {
-      mode: 0o600,
-    });
+    expect(writtenData.walletName).toBeTruthy();
   });
 
   it("creates directory if it doesn't exist", () => {
-    const kp = Keypair.generate();
     mockFs.existsSync.mockReturnValue(false);
 
-    importWallet(JSON.stringify(Array.from(kp.secretKey)));
+    createWallet();
 
     expect(mockFs.mkdirSync).toHaveBeenCalledWith(expect.stringContaining(".agentbazaar"), {
       recursive: true,
@@ -173,11 +167,16 @@ describe("importWallet", () => {
 describe("exportWallet", () => {
   it("returns public and private key", () => {
     const kp = Keypair.generate();
-    mockFs.existsSync.mockReturnValue(true);
+    mockFs.existsSync.mockImplementation((path: string) => {
+      if (path.includes("ows-state.json")) return true;
+      return false;
+    });
     mockFs.readFileSync.mockReturnValue(
       JSON.stringify({
-        publicKey: kp.publicKey.toBase58(),
-        secretKey: Array.from(kp.secretKey),
+        walletName: "test-wallet",
+        solanaAddress: kp.publicKey.toBase58(),
+        publicKeyBase58: kp.publicKey.toBase58(),
+        secretKeyArray: Array.from(kp.secretKey),
         createdAt: new Date().toISOString(),
       }),
     );

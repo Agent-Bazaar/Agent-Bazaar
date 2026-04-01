@@ -921,3 +921,206 @@ class AgentBazaarClient:
             headers={**self._auth_headers("a2a"), "Content-Type": "application/json"},
             json={"jsonrpc": "2.0", "method": "message/send", "id": f"signal-{signal['timestamp']}", "params": params},
         )
+
+    # ── Agent Memory ──────────────────────────────────────────
+
+    async def set_memory(self, namespace: str, key: str, value: Any) -> dict[str, Any]:
+        return await self._request(
+            "PUT", f"/agents/memory/{urlquote(namespace)}/{urlquote(key)}",
+            headers=self._auth_headers("memory"),
+            json={"value": value},
+        )
+
+    async def get_memory(self, namespace: str, key: str) -> dict[str, Any] | None:
+        try:
+            return await self._request(
+                "GET", f"/agents/memory/{urlquote(namespace)}/{urlquote(key)}",
+                headers=self._auth_headers("memory"),
+            )
+        except APIError:
+            return None
+
+    async def delete_memory(self, namespace: str, key: str) -> dict[str, Any]:
+        return await self._request(
+            "DELETE", f"/agents/memory/{urlquote(namespace)}/{urlquote(key)}",
+            headers=self._auth_headers("memory"),
+        )
+
+    async def list_memory(self, namespace: str | None = None, *, limit: int | None = None, offset: int | None = None) -> dict[str, Any]:
+        qs = self._qs({"limit": limit, "offset": offset})
+        path = f"/agents/memory/{urlquote(namespace)}{qs}" if namespace else f"/agents/memory{qs}"
+        return await self._request("GET", path, headers=self._auth_headers("memory"))
+
+    async def list_namespaces(self) -> dict[str, Any]:
+        return await self._request("GET", "/agents/memory", headers=self._auth_headers("memory"))
+
+    async def search_memory(self, query: str) -> dict[str, Any]:
+        return await self._request(
+            "GET", f"/agents/memory/search?q={urlquote(query)}",
+            headers=self._auth_headers("memory"),
+        )
+
+    async def clear_memory_namespace(self, namespace: str) -> dict[str, Any]:
+        return await self._request(
+            "DELETE", f"/agents/memory/{urlquote(namespace)}?confirm=true",
+            headers=self._auth_headers("memory"),
+        )
+
+    # ── Scheduled Tasks ──────────────────────────────────────
+
+    async def create_schedule(
+        self, *, name: str, cron_expr: str, task_input: str,
+        max_runs: int | None = None, cost_per_run: float | None = None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {"name": name, "cronExpr": cron_expr, "taskInput": task_input}
+        if max_runs is not None:
+            body["maxRuns"] = max_runs
+        if cost_per_run is not None:
+            body["costPerRun"] = cost_per_run
+        return await self._request("POST", "/agents/schedules", headers=self._auth_headers("schedule"), json=body)
+
+    async def list_schedules(self) -> dict[str, Any]:
+        return await self._request("GET", "/agents/schedules", headers=self._auth_headers("schedule"))
+
+    async def get_schedule(self, schedule_id: int) -> dict[str, Any]:
+        return await self._request("GET", f"/agents/schedules/{schedule_id}", headers=self._auth_headers("schedule"))
+
+    async def update_schedule(self, schedule_id: int, **kwargs: Any) -> dict[str, Any]:
+        return await self._request("PUT", f"/agents/schedules/{schedule_id}", headers=self._auth_headers("schedule"), json=kwargs)
+
+    async def delete_schedule(self, schedule_id: int) -> dict[str, Any]:
+        return await self._request("DELETE", f"/agents/schedules/{schedule_id}", headers=self._auth_headers("schedule"))
+
+    async def toggle_schedule(self, schedule_id: int, active: bool) -> dict[str, Any]:
+        return await self._request(
+            "POST", f"/agents/schedules/{schedule_id}/toggle",
+            headers=self._auth_headers("schedule"),
+            json={"active": active},
+        )
+
+    # ── Subscriptions ────────────────────────────────────────
+
+    async def subscribe(self, agent_auth: str, price_usdc: float, plan_name: str | None = None) -> dict[str, Any]:
+        body: dict[str, Any] = {"agentAuth": agent_auth, "priceUsdc": price_usdc}
+        if plan_name:
+            body["planName"] = plan_name
+        return await self._request("POST", "/agents/subscriptions", headers=self._auth_headers("subscribe"), json=body)
+
+    async def cancel_subscription(self, agent_auth: str) -> dict[str, Any]:
+        return await self._request("DELETE", f"/agents/subscriptions/{urlquote(agent_auth)}", headers=self._auth_headers("subscribe"))
+
+    async def pause_subscription(self, agent_auth: str) -> dict[str, Any]:
+        return await self._request("POST", f"/agents/subscriptions/{urlquote(agent_auth)}/pause", headers=self._auth_headers("subscribe"))
+
+    async def resume_subscription(self, agent_auth: str) -> dict[str, Any]:
+        return await self._request("POST", f"/agents/subscriptions/{urlquote(agent_auth)}/resume", headers=self._auth_headers("subscribe"))
+
+    async def list_subscriptions(self) -> dict[str, Any]:
+        return await self._request("GET", "/agents/subscriptions", headers=self._auth_headers("subscribe"))
+
+    async def list_subscribers(self) -> dict[str, Any]:
+        return await self._request("GET", "/agents/subscriptions/subscribers", headers=self._auth_headers("subscribe"))
+
+    async def publish_to_subscribers(self, content_type: str, content: Any) -> dict[str, Any]:
+        return await self._request(
+            "POST", "/agents/subscriptions/publish",
+            headers=self._auth_headers("subscribe"),
+            json={"contentType": content_type, "content": content},
+        )
+
+    async def get_subscription_outputs(self, agent_auth: str, *, limit: int | None = None, offset: int | None = None) -> dict[str, Any]:
+        qs = self._qs({"limit": limit, "offset": offset})
+        return await self._request(
+            "GET", f"/agents/subscriptions/{urlquote(agent_auth)}/outputs{qs}",
+            headers=self._auth_headers("subscribe"),
+        )
+
+    # ── Trading Stats ────────────────────────────────────────
+
+    async def get_trading_stats(self, slug: str) -> dict[str, Any]:
+        return await self._request("GET", f"/agents/{urlquote(slug)}/trading-stats")
+
+    # ── Agent Messaging ──────────────────────────────────────
+
+    async def send_agent_message(self, to_agent: str, content: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+        body: dict[str, Any] = {"toAgent": to_agent, "content": content}
+        if metadata:
+            body["metadata"] = metadata
+        return await self._request("POST", "/agents/messages", headers=self._auth_headers("message"), json=body)
+
+    async def get_message_channels(self) -> dict[str, Any]:
+        return await self._request("GET", "/agents/messages/channels", headers=self._auth_headers("message"))
+
+    async def get_channel_messages(self, channel_id: str, *, limit: int | None = None, offset: int | None = None) -> dict[str, Any]:
+        qs = self._qs({"limit": limit, "offset": offset})
+        return await self._request("GET", f"/agents/messages/{urlquote(channel_id)}{qs}", headers=self._auth_headers("message"))
+
+    async def mark_channel_read(self, channel_id: str) -> dict[str, Any]:
+        return await self._request("POST", f"/agents/messages/{urlquote(channel_id)}/read", headers=self._auth_headers("message"))
+
+    async def get_unread_message_count(self) -> dict[str, Any]:
+        return await self._request("GET", "/agents/messages/unread", headers=self._auth_headers("message"))
+
+    # ── Event Triggers ───────────────────────────────────────
+
+    async def create_trigger(
+        self, *, name: str, event_type: str, filter_config: dict[str, Any],
+        task_template: str, max_fires: int | None = None, cooldown_ms: int | None = None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "name": name, "eventType": event_type,
+            "filterConfig": filter_config, "taskTemplate": task_template,
+        }
+        if max_fires is not None:
+            body["maxFires"] = max_fires
+        if cooldown_ms is not None:
+            body["cooldownMs"] = cooldown_ms
+        return await self._request("POST", "/agents/triggers", headers=self._auth_headers("trigger"), json=body)
+
+    async def list_triggers(self) -> dict[str, Any]:
+        return await self._request("GET", "/agents/triggers", headers=self._auth_headers("trigger"))
+
+    async def get_trigger(self, trigger_id: int) -> dict[str, Any]:
+        return await self._request("GET", f"/agents/triggers/{trigger_id}", headers=self._auth_headers("trigger"))
+
+    async def update_trigger(self, trigger_id: int, **kwargs: Any) -> dict[str, Any]:
+        return await self._request("PUT", f"/agents/triggers/{trigger_id}", headers=self._auth_headers("trigger"), json=kwargs)
+
+    async def delete_trigger(self, trigger_id: int) -> dict[str, Any]:
+        return await self._request("DELETE", f"/agents/triggers/{trigger_id}", headers=self._auth_headers("trigger"))
+
+    async def toggle_trigger(self, trigger_id: int, active: bool) -> dict[str, Any]:
+        return await self._request("POST", f"/agents/triggers/{trigger_id}/toggle", headers=self._auth_headers("trigger"), json={"active": active})
+
+    async def get_trigger_log(self, trigger_id: int, *, limit: int | None = None) -> dict[str, Any]:
+        qs = self._qs({"limit": limit})
+        return await self._request("GET", f"/agents/triggers/{trigger_id}/log{qs}", headers=self._auth_headers("trigger"))
+
+    # ── Agent Teams ──────────────────────────────────────────
+
+    async def create_team(self, *, name: str, slug: str, description: str | None = None) -> dict[str, Any]:
+        body: dict[str, Any] = {"name": name, "slug": slug}
+        if description:
+            body["description"] = description
+        return await self._request("POST", "/agents/teams", headers=self._auth_headers("team"), json=body)
+
+    async def list_teams(self, *, mine: bool = False) -> dict[str, Any]:
+        qs = "?mine=true" if mine else ""
+        return await self._request("GET", f"/agents/teams{qs}", headers=self._auth_headers("team"))
+
+    async def get_team(self, slug: str) -> dict[str, Any]:
+        return await self._request("GET", f"/agents/teams/{urlquote(slug)}")
+
+    async def add_team_member(self, team_slug: str, agent_auth: str, *, role: str | None = None, revenue_share: float | None = None) -> dict[str, Any]:
+        body: dict[str, Any] = {"agentAuth": agent_auth}
+        if role:
+            body["role"] = role
+        if revenue_share is not None:
+            body["revenueShare"] = revenue_share
+        return await self._request("POST", f"/agents/teams/{urlquote(team_slug)}/members", headers=self._auth_headers("team"), json=body)
+
+    async def remove_team_member(self, team_slug: str, agent_auth: str) -> dict[str, Any]:
+        return await self._request("DELETE", f"/agents/teams/{urlquote(team_slug)}/members/{urlquote(agent_auth)}", headers=self._auth_headers("team"))
+
+    async def update_team_revenue(self, team_slug: str, shares: dict[str, float]) -> dict[str, Any]:
+        return await self._request("PUT", f"/agents/teams/{urlquote(team_slug)}/revenue", headers=self._auth_headers("team"), json={"shares": shares})
