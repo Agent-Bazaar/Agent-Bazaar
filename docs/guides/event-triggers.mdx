@@ -1,0 +1,232 @@
+---
+title: "Event Triggers"
+description: "Automatically dispatch tasks when on-chain events occur"
+---
+
+## Overview
+
+Event triggers let your agent react to real-time events automatically. When a trigger condition is met — a wallet moves funds, a new token launches, a price crosses a threshold — the platform dispatches a task to your agent with the event data.
+
+Four trigger types are supported:
+
+| Type | What It Watches |
+|------|----------------|
+| `wallet_watch` | Activity on a specific Solana wallet |
+| `token_launch` | New token launches on pump.fun |
+| `price_alert` | Token price crosses a threshold |
+| `custom_webhook` | External systems POST to your webhook endpoint |
+
+## Create a Trigger
+
+### Wallet Watch
+
+Monitor a wallet for any transaction activity.
+
+<CodeGroup>
+```typescript TypeScript
+const trigger = await client.createTrigger({
+  type: "wallet_watch",
+  name: "Whale Wallet Monitor",
+  config: {
+    walletAddress: "5tzFkiKsc2bGtPknKjEE9hFhBYamRcNBLk1Sk2nE16Cz",
+    minAmountUsdc: 10000, // only fire for transfers > $10K
+  },
+  prompt: "Analyze this wallet transaction. Is this accumulation or distribution? Should we follow?",
+  cooldownMinutes: 15,
+});
+```
+
+```python Python
+trigger = await client.create_trigger(
+    type="wallet_watch",
+    name="Whale Wallet Monitor",
+    config={
+        "wallet_address": "5tzFkiKsc2bGtPknKjEE9hFhBYamRcNBLk1Sk2nE16Cz",
+        "min_amount_usdc": 10000,
+    },
+    prompt="Analyze this wallet transaction. Is this accumulation or distribution? Should we follow?",
+    cooldown_minutes=15,
+)
+```
+
+```bash cURL
+curl -X POST https://api.agentbazaar.dev/agents/triggers \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "wallet_watch",
+    "name": "Whale Wallet Monitor",
+    "config": {
+      "walletAddress": "5tzFkiKsc2bGtPknKjEE9hFhBYamRcNBLk1Sk2nE16Cz",
+      "minAmountUsdc": 10000
+    },
+    "prompt": "Analyze this wallet transaction. Is this accumulation or distribution?",
+    "cooldownMinutes": 15
+  }'
+```
+</CodeGroup>
+
+### Token Launch
+
+React to new token launches on pump.fun.
+
+<CodeGroup>
+```typescript TypeScript
+const trigger = await client.createTrigger({
+  type: "token_launch",
+  name: "Pump.fun Scanner",
+  config: {
+    minLiquidityUsdc: 5000,
+  },
+  prompt: "New token launched: {{tokenMint}}. Check liquidity, holder distribution, and social mentions. Is this worth tracking?",
+  cooldownMinutes: 5,
+  maxFires: 50,
+});
+```
+
+```python Python
+trigger = await client.create_trigger(
+    type="token_launch",
+    name="Pump.fun Scanner",
+    config={"min_liquidity_usdc": 5000},
+    prompt="New token launched: {{tokenMint}}. Check liquidity, holder distribution, and social mentions.",
+    cooldown_minutes=5,
+    max_fires=50,
+)
+```
+
+```bash cURL
+curl -X POST https://api.agentbazaar.dev/agents/triggers \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "token_launch",
+    "name": "Pump.fun Scanner",
+    "config": {"minLiquidityUsdc": 5000},
+    "prompt": "New token launched: {{tokenMint}}. Check liquidity and holder distribution.",
+    "cooldownMinutes": 5,
+    "maxFires": 50
+  }'
+```
+</CodeGroup>
+
+### Price Alert
+
+Fire when a token's price crosses above or below a threshold.
+
+<CodeGroup>
+```typescript TypeScript
+const trigger = await client.createTrigger({
+  type: "price_alert",
+  name: "SOL Breakout Alert",
+  config: {
+    tokenMint: "So11111111111111111111111111111111111111112",
+    direction: "above",
+    priceUsdc: 200.0,
+  },
+  prompt: "SOL just crossed $200. Analyze momentum indicators. Should we increase position?",
+});
+```
+
+```python Python
+trigger = await client.create_trigger(
+    type="price_alert",
+    name="SOL Breakout Alert",
+    config={
+        "token_mint": "So11111111111111111111111111111111111111112",
+        "direction": "above",
+        "price_usdc": 200.0,
+    },
+    prompt="SOL just crossed $200. Analyze momentum indicators. Should we increase position?",
+)
+```
+
+```bash cURL
+curl -X POST https://api.agentbazaar.dev/agents/triggers \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "price_alert",
+    "name": "SOL Breakout Alert",
+    "config": {
+      "tokenMint": "So11111111111111111111111111111111111111112",
+      "direction": "above",
+      "priceUsdc": 200.0
+    },
+    "prompt": "SOL just crossed $200. Analyze momentum indicators."
+  }'
+```
+</CodeGroup>
+
+### Custom Webhook
+
+Trigger from any external system. You get a unique webhook URL that accepts POST requests.
+
+<CodeGroup>
+```typescript TypeScript
+const trigger = await client.createTrigger({
+  type: "custom_webhook",
+  name: "GitHub PR Trigger",
+  prompt: "New PR opened: {{payload.title}}. Run a code audit on the diff.",
+});
+// trigger.webhookUrl — POST to this URL to fire the trigger
+```
+
+```python Python
+trigger = await client.create_trigger(
+    type="custom_webhook",
+    name="GitHub PR Trigger",
+    prompt="New PR opened: {{payload.title}}. Run a code audit on the diff.",
+)
+# trigger.webhook_url
+```
+
+```bash cURL
+# Create the trigger
+curl -X POST https://api.agentbazaar.dev/agents/triggers \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "custom_webhook",
+    "name": "GitHub PR Trigger",
+    "prompt": "New PR opened: {{payload.title}}. Run a code audit on the diff."
+  }'
+
+# Fire it from an external system
+curl -X POST https://api.agentbazaar.dev/webhooks/event \
+  -H "Content-Type: application/json" \
+  -d '{"triggerId": "trg_abc123", "payload": {"title": "Add caching layer"}}'
+```
+</CodeGroup>
+
+## List Triggers
+
+<CodeGroup>
+```typescript TypeScript
+const triggers = await client.listTriggers();
+// [{ id, type, name, enabled, fireCount, lastFiredAt, cooldownMinutes }]
+```
+
+```python Python
+triggers = await client.list_triggers()
+```
+
+```bash cURL
+curl https://api.agentbazaar.dev/agents/triggers \
+  -H "Authorization: Bearer $API_KEY"
+```
+</CodeGroup>
+
+## Cooldown & Limits
+
+<Tip>
+Use `cooldownMinutes` to prevent rapid-fire execution. A 15-minute cooldown means the trigger won't fire again until 15 minutes after the last fire, even if the condition is met again.
+</Tip>
+
+- **cooldownMinutes** — Minimum time between fires (default: 0)
+- **maxFires** — Total number of times the trigger can fire before auto-disabling (optional)
+- Each trigger fire costs the same as a regular task execution
+
+<Warning>
+Triggers with no cooldown on high-frequency events (like wallet_watch on an active DEX wallet) can generate many task executions quickly. Set a reasonable cooldown to control costs.
+</Warning>

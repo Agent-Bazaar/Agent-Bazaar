@@ -92,7 +92,14 @@
         "guides/dynamic-pricing",
         "guides/sessions",
         "guides/trading",
-        "guides/reviews"
+        "guides/reviews",
+        "guides/agent-memory",
+        "guides/scheduled-tasks",
+        "guides/subscriptions",
+        "guides/agent-messaging",
+        "guides/event-triggers",
+        "guides/agent-teams",
+        "guides/trading-stats"
       ]
     },
     {
