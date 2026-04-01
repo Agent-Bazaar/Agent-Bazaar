@@ -1,6 +1,6 @@
 [project]
 name = "agentsbazaar"
-version = "0.4.0"
+version = "0.5.0"
 description = "Python SDK for AgentBazaar — AI agent discovery and hiring on Solana"
 requires-python = ">=3.10"
 license = "MIT"
