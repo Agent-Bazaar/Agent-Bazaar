@@ -1590,4 +1590,139 @@ export class AgentBazaarClient {
       body: JSON.stringify({ shares }),
     });
   }
+
+  // ── Cross-Agent Delegation ──
+
+  /**
+   * Grant another agent permission to trade from your wallet.
+   *
+   * @param grantee - Agent authority or pubkey of the trader
+   * @param maxAmountUsdc - Maximum USDC per trade
+   * @param options - Delegation options (token whitelist, rolling, TP/SL, expiry)
+   */
+  async delegate(
+    grantee: string,
+    maxAmountUsdc: number,
+    options?: {
+      allowedTokens?: string[];
+      rolling?: boolean;
+      takeProfitPct?: number;
+      stopLossPct?: number;
+      lifetimeCapUsdc?: number;
+      expiresInHours?: number;
+    },
+  ): Promise<{ delegation: Record<string, unknown> }> {
+    return this.request("/delegation/grant", {
+      method: "POST",
+      headers: this.authHeaders("delegation"),
+      body: JSON.stringify({ grantee, maxAmountUsdc, ...options }),
+    });
+  }
+
+  /** Revoke a delegation you granted. */
+  async revokeDelegation(delegationId: number): Promise<{ success: boolean }> {
+    return this.request(`/delegation/${delegationId}`, {
+      method: "DELETE",
+      headers: this.authHeaders("delegation"),
+    });
+  }
+
+  /** List delegations you've granted (as grantor). */
+  async getDelegationsGranted(): Promise<{ delegations: Array<Record<string, unknown>> }> {
+    return this.request("/delegation/granted", { headers: this.authHeaders("delegation") });
+  }
+
+  /** List delegations you've received (as grantee). */
+  async getDelegationsReceived(): Promise<{ delegations: Array<Record<string, unknown>> }> {
+    return this.request("/delegation/received", { headers: this.authHeaders("delegation") });
+  }
+
+  /** Get delegation details. */
+  async getDelegation(delegationId: number): Promise<{ delegation: Record<string, unknown> }> {
+    return this.request(`/delegation/${delegationId}`, { headers: this.authHeaders("delegation") });
+  }
+
+  /** Get trade history for a delegation. */
+  async getDelegationTrades(delegationId: number): Promise<{ trades: Array<Record<string, unknown>> }> {
+    return this.request(`/delegation/${delegationId}/trades`, { headers: this.authHeaders("delegation") });
+  }
+
+  /**
+   * Execute a trade using delegation rights (trade from another agent's wallet).
+   *
+   * @param delegator - The wallet owner (grantor)
+   * @param action - "buy" or "sell"
+   * @param tokenMint - Token to trade
+   * @param amountUsdc - USDC amount
+   * @param options - Session key, slippage, urgency
+   */
+  async delegatedTrade(
+    delegator: string,
+    action: "buy" | "sell",
+    tokenMint: string,
+    amountUsdc: number,
+    options?: { sessionKey?: string; slippage?: number; urgency?: string },
+  ): Promise<Record<string, unknown>> {
+    return this.request("/delegation/trade", {
+      method: "POST",
+      headers: this.authHeaders("delegation"),
+      body: JSON.stringify({ delegator, action, tokenMint, amountUsdc, ...options }),
+    });
+  }
+
+  // ── Treasury Spend Limits ──
+
+  /**
+   * Set spending policy for your agent (per-trade cap, daily limit, token whitelist).
+   */
+  async setSpendPolicy(params: {
+    maxPerTradeUsdc?: number;
+    dailyLimitUsdc?: number;
+    allowedTokens?: string[];
+  }): Promise<{ policy: Record<string, unknown> }> {
+    return this.request("/delegation/policy", {
+      method: "POST",
+      headers: this.authHeaders("policy"),
+      body: JSON.stringify(params),
+    });
+  }
+
+  /** Get current spend policy. */
+  async getSpendPolicy(): Promise<{ policy: Record<string, unknown> | null }> {
+    return this.request("/delegation/policy", { headers: this.authHeaders("policy") });
+  }
+
+  /** Remove spend limits (unlimited trading). */
+  async removeSpendPolicy(): Promise<{ success: boolean }> {
+    return this.request("/delegation/policy", {
+      method: "DELETE",
+      headers: this.authHeaders("policy"),
+    });
+  }
+
+  // ── Session-Scoped Signing Tokens ──
+
+  /**
+   * Create a one-time ephemeral trading key.
+   *
+   * @param allowedAction - "buy", "sell", or "batch"
+   * @param maxAmountUsdc - Maximum USDC for this key
+   * @param options - Token filter, delegator scope, TTL
+   */
+  async createSessionKey(
+    allowedAction: "buy" | "sell" | "batch",
+    maxAmountUsdc: number,
+    options?: { tokenMint?: string; delegator?: string; ttlSeconds?: number },
+  ): Promise<{ sessionKey: string; expiresAt: number }> {
+    return this.request("/delegation/session-key", {
+      method: "POST",
+      headers: this.authHeaders("session-key"),
+      body: JSON.stringify({ allowedAction, maxAmountUsdc, ...options }),
+    });
+  }
+
+  /** List active session keys. */
+  async listSessionKeys(): Promise<{ keys: Array<Record<string, unknown>> }> {
+    return this.request("/delegation/session-keys", { headers: this.authHeaders("session-key") });
+  }
 }

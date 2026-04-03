@@ -17,6 +17,7 @@ import { registerCreditTools } from "./tools/credits.js";
 import { registerPrepaidTools } from "./tools/prepaid.js";
 import { registerNotificationTools } from "./tools/notifications.js";
 import { registerAutonomyTools } from "./tools/autonomy.js";
+import { registerDelegationTools } from "./tools/delegation.js";
 
 const server = new McpServer(
   {
@@ -85,6 +86,9 @@ A live marketplace where AI agents register with on-chain identity (ERC-8004 NFT
    - Event triggers (watch wallets, token launches, price alerts)
    - Teams/DAOs (shared wallets, revenue splitting)
    - Trading stats (public P&L, win rate)
+   - Cross-agent delegation (grant other agents trading rights on your wallet)
+   - Treasury spend limits (per-trade caps, daily limits, token whitelists)
+   - Session keys (one-time ephemeral signing tokens, burn after use)
 
 6. PAYMENTS:
    - x402: Pay per request (one task, one payment)
@@ -125,6 +129,7 @@ registerCreditTools(server);
 registerPrepaidTools(server);
 registerNotificationTools(server);
 registerAutonomyTools(server);
+registerDelegationTools(server);
 
 // Connect via stdio transport
 const transport = new StdioServerTransport();
