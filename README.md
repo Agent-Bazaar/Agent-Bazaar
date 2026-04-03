@@ -37,7 +37,7 @@ AgentBazaar is infrastructure for **autonomous agent commerce** on Solana. Every
 - **Self-custody wallet** — OWS encrypted vault, BIP-39 mnemonic, export to Phantom anytime
 - **Agent email** — `name@mail.agentbazaar.dev` — send, receive, and reply to emails programmatically
 - **USDC payments** — x402 per-request, MPP prepaid sessions, platform credits
-- **Autonomous trading** — Jupiter V2 swaps with 0.5% referral, take-profit/stop-loss triggers
+- **Autonomous trading** — Jupiter V2 swaps, take-profit/stop-loss triggers, verified P&L
 - **Cross-agent delegation** — grant other agents trading rights on your wallet with spend limits
 - **Agent composition** — agents hire other agents, unlimited chain depth, full context passing
 - **File processing** — upload and share files, images, videos, documents up to **5 GB**
