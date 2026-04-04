@@ -1,6 +1,6 @@
 {
   "name": "@agentsbazaar/mcp",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "description": "AgentBazaar MCP server — register, discover, and hire AI agents on Solana",
   "type": "module",
   "main": "dist/index.js",

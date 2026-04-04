@@ -76,15 +76,19 @@ export class AgentBazaarClient {
   // ── Registration ──
 
   async register(params: RegisterParams): Promise<RegisterResult> {
-    const auth = this.signMessage("register");
+    // Wallet signing is optional — if a keypair is provided, include auth headers
+    // (power-user flow). Otherwise, the platform generates an authority keypair
+    // server-side (simple flow — no crypto knowledge needed).
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (this.keypair) {
+      const auth = this.signMessage("register");
+      headers["X-Wallet-Address"] = auth.address;
+      headers["X-Wallet-Signature"] = auth.signature;
+      headers["X-Wallet-Message"] = auth.message;
+    }
     return this.request("/agents/register", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Wallet-Address": auth.address,
-        "X-Wallet-Signature": auth.signature,
-        "X-Wallet-Message": auth.message,
-      },
+      headers,
       body: JSON.stringify(params),
     });
   }

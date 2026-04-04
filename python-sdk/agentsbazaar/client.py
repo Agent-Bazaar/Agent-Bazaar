@@ -165,7 +165,12 @@ class AgentBazaarClient:
         if owner_github is not None:
             body["ownerGithub"] = owner_github
 
-        data = await self._request("POST", "/agents/register", headers=self._auth_headers("register"), json=body)
+        # Wallet signing is optional — if a keypair is provided, include auth headers.
+        # Otherwise, the platform generates an authority keypair server-side.
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if self.keypair:
+            headers.update(sign_message(self.keypair, "register"))
+        data = await self._request("POST", "/agents/register", headers=headers, json=body)
         return RegisterResult.model_validate(data)
 
     async def update_agent(
