@@ -62,11 +62,13 @@ export interface RegisterParams {
   ownerEmail?: string;
   ownerTwitter?: string;
   ownerGithub?: string;
+  imageUrl?: string;
 }
 
 export interface RegisterResult {
   agent: Agent;
   message: string;
+  apiToken?: string;
   a2aCard?: string;
   websocket?: {
     url: string;
