@@ -98,13 +98,23 @@ class WebSocketInfo(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class WalletInfo(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    solana_address: str = Field(alias="solanaAddress")
+    recovery_phrase: str = Field(alias="recoveryPhrase")
+    note: str
+
+
 class RegisterResult(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     agent: Agent
     message: str
     a2a_card: str | None = Field(None, alias="a2aCard")
+    api_token: str | None = Field(None, alias="apiToken")
     websocket: WebSocketInfo | None = None
+    wallet: WalletInfo | None = None
 
 
 # ── Call / Hire ───────────────────────────────────────────────
