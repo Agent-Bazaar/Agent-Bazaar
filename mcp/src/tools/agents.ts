@@ -25,7 +25,9 @@ interface RegisterResponse {
   agent: AgentRow;
   message: string;
   a2aCard?: string;
+  apiToken?: string;
   websocket?: { url: string; token: string; pollUrl: string };
+  wallet?: { solanaAddress: string; recoveryPhrase: string; note: string };
 }
 
 export function registerAgentTools(server: McpServer): void {
@@ -172,47 +174,34 @@ export function registerAgentTools(server: McpServer): void {
           return { content: [{ type: "text", text: "Error: --endpoint is required for push mode." }] };
         }
 
-        // Auto-create wallet if needed
-        let keypair;
-        let walletNote = "";
-        if (!walletExists()) {
-          const { keypair: kp, privateKeyBase58 } = createWallet();
-          keypair = kp;
-          walletNote = [
-            ``,
-            `---`,
-            `**New wallet created!**`,
-            `**Public Key:** \`${keypair.publicKey.toBase58()}\``,
-            `**Private Key:** \`${privateKeyBase58}\``,
-            `> Save your private key now — it won't be shown again.`,
-          ].join("\n");
-        } else {
-          keypair = loadWallet();
-        }
-
         // Convert human price to micro-units
         const priceFloat = parseFloat(price);
-        if (isNaN(priceFloat) || priceFloat <= 0) {
-          return { content: [{ type: "text", text: "Error: Price must be a positive number (e.g. '0.10')." }] };
+        if (isNaN(priceFloat) || priceFloat < 0) {
+          return { content: [{ type: "text", text: "Error: Price must be >= 0 (e.g. '0.10' or '0' for free)." }] };
         }
         const pricePerRequest = Math.round(priceFloat * 1_000_000);
 
-        const result = await api.postAuthenticated<RegisterResponse>(
-          "/agents/register",
-          {
-            name,
-            skills,
-            description: description || "",
-            pricePerRequest,
-            deliveryMode: mode,
-            endpoint: endpoint || "",
-            ownerEmail: ownerEmail || undefined,
-            ownerTwitter: ownerTwitter?.replace(/^@/, "") || undefined,
-            ownerGithub: ownerGithub || undefined,
-          },
-          keypair,
-          "register",
-        );
+        const body = {
+          name,
+          skills,
+          description: description || "",
+          pricePerRequest,
+          deliveryMode: mode,
+          endpoint: endpoint || "",
+          ownerEmail: ownerEmail || undefined,
+          ownerTwitter: ownerTwitter?.replace(/^@/, "") || undefined,
+          ownerGithub: ownerGithub || undefined,
+        };
+
+        // Registration no longer requires a wallet — platform generates authority keypair.
+        // If a local wallet exists, include it for backwards compatibility.
+        let result: RegisterResponse;
+        if (walletExists()) {
+          const keypair = loadWallet();
+          result = await api.postAuthenticated<RegisterResponse>("/agents/register", body, keypair, "register");
+        } else {
+          result = await api.post<RegisterResponse>("/agents/register", body);
+        }
 
         const lines = [
           `Agent registered successfully!`,
@@ -242,12 +231,24 @@ export function registerAgentTools(server: McpServer): void {
           lines.push(`- Poll Fallback: ${result.websocket.pollUrl}`);
         }
 
+        if (result.apiToken) {
+          lines.push(``);
+          lines.push(`**API Token:** \`${result.apiToken}\``);
+          lines.push(`> Save this token — use it as \`x-api-key\` header to manage your agent.`);
+        }
+
+        if (result.wallet) {
+          lines.push(``);
+          lines.push(`**Wallet:**`);
+          lines.push(`- Solana Address: \`${result.wallet.solanaAddress}\``);
+          lines.push(`- Recovery Phrase: \`${result.wallet.recoveryPhrase}\``);
+          lines.push(`> Save your recovery phrase! You can export this wallet to Phantom/Solflare anytime.`);
+        }
+
         lines.push(``);
         lines.push(`**Next steps:**`);
         lines.push(`1. Use \`set_agent_image\` to upload a profile image or logo`);
-        lines.push(`2. Deposit USDC (Solana) to \`${result.agent.authority}\` to hire other agents`);
-
-        if (walletNote) lines.push(walletNote);
+        lines.push(`2. Your agent has an OWS wallet — USDC payments go there automatically`);
 
         return { content: [{ type: "text", text: lines.join("\n") }] };
       } catch (err) {
