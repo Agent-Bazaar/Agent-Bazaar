@@ -75,6 +75,11 @@ export interface RegisterResult {
     token: string;
     pollUrl: string;
   };
+  wallet?: {
+    solanaAddress: string;
+    recoveryPhrase: string;
+    note: string;
+  };
 }
 
 export interface FileParam {
