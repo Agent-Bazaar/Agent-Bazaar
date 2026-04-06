@@ -375,4 +375,189 @@ program
     }
   });
 
+// ── activate ──
+program
+  .command("activate")
+  .description("Register a new agent and generate a ready-to-run project")
+  .option("--dir <path>", "Output directory for the project", ".")
+  .option("--api <url>", "API base URL")
+  .action(async (opts) => {
+    const rl = await import("readline");
+    const iface = rl.createInterface({ input: process.stdin, output: process.stdout });
+    const ask = (q: string): Promise<string> =>
+      new Promise((resolve) => iface.question(q, (a: string) => resolve(a.trim())));
+
+    try {
+      console.log("\n🐬 AgentBazaar — Activate Your Agent\n");
+
+      const name = await ask("Agent name: ");
+      if (!name) {
+        console.error("Name is required.");
+        process.exit(1);
+      }
+      const skills = await ask("Skills (comma-separated): ");
+      if (!skills) {
+        console.error("Skills are required.");
+        process.exit(1);
+      }
+      const description = await ask("Description (optional): ");
+      const priceStr = await ask("Price per request in USDC (e.g. 0.10, or 0 for free): ");
+      const priceFloat = parseFloat(priceStr || "0");
+      if (isNaN(priceFloat) || priceFloat < 0) {
+        console.error("Invalid price.");
+        process.exit(1);
+      }
+      const email = await ask("Your email (optional, for dashboard claim): ");
+      const systemPrompt = await ask("What does your agent do? (becomes the system prompt): ");
+
+      iface.close();
+
+      // Register on AgentBazaar (keyless — no wallet needed)
+      const baseUrl = opts.api || process.env.AGENTBAZAAR_API || "https://agentbazaar.dev";
+      console.log("\nRegistering agent on AgentBazaar...");
+
+      const res = await fetch(`${baseUrl}/agents/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          skills,
+          description: description || "",
+          pricePerRequest: Math.round(priceFloat * 1_000_000),
+          deliveryMode: "ws",
+          ownerEmail: email || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = ((await res.json().catch(() => ({}))) as Record<string, unknown>);
+        console.error(`Registration failed: ${err.error || res.statusText}`);
+        process.exit(1);
+      }
+
+      const data = (await res.json()) as {
+        agent: { name: string; authority: string; slug: string | null; nft_8004: string | null };
+        apiToken?: string;
+        websocket?: { url: string; token: string; pollUrl: string };
+        wallet?: { solanaAddress: string; recoveryPhrase: string; note: string };
+      };
+
+      console.log(`\nAgent "${data.agent.name}" registered!`);
+
+      // Generate project files
+      const dir = path.resolve(opts.dir);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+      // package.json
+      const pkg = {
+        name: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        version: "1.0.0",
+        private: true,
+        type: "module",
+        scripts: { start: "node index.js" },
+        dependencies: {
+          "@anthropic-ai/sdk": "^0.80.0",
+          ws: "^8.18.0",
+        },
+      };
+      fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify(pkg, null, 2) + "\n");
+
+      // .env
+      const envLines = [
+        `AGENTBAZAAR_WS_TOKEN=${data.websocket?.token || data.apiToken || "YOUR_TOKEN_HERE"}`,
+        `ANTHROPIC_API_KEY=YOUR_ANTHROPIC_API_KEY`,
+      ];
+      fs.writeFileSync(path.join(dir, ".env"), envLines.join("\n") + "\n");
+
+      // index.js
+      const agentScript = `import Anthropic from "@anthropic-ai/sdk";
+import WebSocket from "ws";
+import { readFileSync } from "fs";
+
+// Load .env
+const env = Object.fromEntries(
+  readFileSync(new URL(".env", import.meta.url), "utf-8")
+    .split("\\n").filter(l => l && !l.startsWith("#"))
+    .map(l => { const [k, ...v] = l.split("="); return [k, v.join("=")]; })
+);
+
+const WS_TOKEN = env.AGENTBAZAAR_WS_TOKEN || process.env.AGENTBAZAAR_WS_TOKEN;
+const API_KEY = env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
+
+if (!WS_TOKEN) { console.error("Missing AGENTBAZAAR_WS_TOKEN in .env"); process.exit(1); }
+if (!API_KEY) { console.error("Missing ANTHROPIC_API_KEY in .env"); process.exit(1); }
+
+const client = new Anthropic({ apiKey: API_KEY });
+
+const SYSTEM_PROMPT = ${JSON.stringify(systemPrompt || `You are ${name}. ${description || "You help users with their requests."}`)};
+
+let ws = null;
+const RECONNECT_MS = 5000;
+
+function connect() {
+  console.log("Connecting to AgentBazaar...");
+  ws = new WebSocket(\`wss://agentbazaar.dev/ws?token=\${WS_TOKEN}\`);
+
+  ws.on("open", () => console.log("Connected! Listening for jobs..."));
+
+  ws.on("message", async (data) => {
+    try {
+      const msg = JSON.parse(data.toString());
+      if (!msg.taskId || !msg.input) return;
+
+      const taskText = typeof msg.input === "string" ? msg.input : msg.input.task || JSON.stringify(msg.input);
+      console.log(\`Job \${msg.taskId}: \${taskText.slice(0, 80)}\`);
+
+      const response = await client.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1024,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: taskText }],
+      });
+
+      const result = response.content[0]?.text || "";
+      ws.send(JSON.stringify({ taskId: msg.taskId, result: { success: true, agent: ${JSON.stringify(name)}, result }, status: 200, final: true }));
+      console.log(\`Job \${msg.taskId}: responded\`);
+    } catch (err) {
+      console.error("Error:", err.message);
+      try {
+        const msg = JSON.parse(data.toString());
+        if (msg.taskId) ws.send(JSON.stringify({ taskId: msg.taskId, result: { success: false, error: "Agent error" }, status: 500, final: true }));
+      } catch {}
+    }
+  });
+
+  ws.on("close", () => { console.log("Disconnected. Reconnecting..."); setTimeout(connect, RECONNECT_MS); });
+  ws.on("error", (err) => console.error("WS error:", err.message));
+}
+
+connect();
+process.on("SIGINT", () => { if (ws) ws.close(); process.exit(0); });
+`;
+
+      fs.writeFileSync(path.join(dir, "index.js"), agentScript);
+
+      // Print summary
+      console.log(`\n--- Your Agent ---`);
+      console.log(`Name: ${data.agent.name}`);
+      console.log(`Authority: ${data.agent.authority}`);
+      if (data.agent.slug) console.log(`Profile: https://agentbazaar.dev/agent/${data.agent.slug}`);
+      if (data.wallet) {
+        console.log(`Wallet: ${data.wallet.solanaAddress}`);
+        console.log(`Recovery Phrase: ${data.wallet.recoveryPhrase}`);
+      }
+      if (data.apiToken) console.log(`API Token: ${data.apiToken}`);
+
+      console.log(`\n--- Next Steps ---`);
+      console.log(`1. cd ${dir === process.cwd() ? "." : path.relative(process.cwd(), dir)}`);
+      console.log(`2. Add your ANTHROPIC_API_KEY to .env`);
+      console.log(`3. npm install`);
+      console.log(`4. npm start`);
+      console.log(`\nYour agent will connect to AgentBazaar and start earning!`);
+    } catch (err) {
+      console.error(`Failed: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    }
+  });
+
 program.parse();

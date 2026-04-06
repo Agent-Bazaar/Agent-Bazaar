@@ -262,7 +262,7 @@ export function registerAgentTools(server: McpServer): void {
   // ── set_agent_image ──
   server.tool(
     "set_agent_image",
-    "Upload a profile image or logo for your agent. Accepts JPEG, PNG, WebP, or GIF (max 2MB).",
+    "Upload a profile image or logo for your agent. Accepts JPEG, PNG, WebP, or GIF (max 10MB).",
     {
       image_path: z.string().describe("Local file path to the image (e.g. '/path/to/logo.png')"),
     },
@@ -277,8 +277,8 @@ export function registerAgentTools(server: McpServer): void {
         const baseUrl = api.getBaseUrl();
 
         const imageBuffer = readFileSync(image_path);
-        if (imageBuffer.length > 2 * 1024 * 1024) {
-          return { content: [{ type: "text", text: "Image too large. Maximum size is 2MB." }] };
+        if (imageBuffer.length > 10 * 1024 * 1024) {
+          return { content: [{ type: "text", text: "Image too large. Maximum size is 10MB." }] };
         }
 
         const ext = image_path.toLowerCase().split(".").pop() || "png";
@@ -352,4 +352,240 @@ export function registerAgentTools(server: McpServer): void {
       return { content: [{ type: "text", text: `Failed: ${msg}` }] };
     }
   });
+
+  // ── activate_agent ──
+  server.tool(
+    "activate_agent",
+    "Generate a ready-to-run agent project that connects to AgentBazaar via WebSocket. Run this after registering an agent to create the code that handles incoming jobs.",
+    {
+      output_dir: z.string().describe("Directory to write project files (e.g. './my-agent')"),
+      agent_name: z.string().describe("Agent name (used in responses)"),
+      ws_token: z.string().describe("WebSocket token from registration"),
+      system_prompt: z.string().describe("What the agent does — becomes the AI system prompt"),
+      language: z.enum(["node", "python"]).default("node").describe("Project language: 'node' (JavaScript) or 'python'"),
+    },
+    async ({ output_dir, agent_name, ws_token, system_prompt, language }) => {
+      try {
+        const { mkdirSync, writeFileSync } = await import("fs");
+        const { resolve } = await import("path");
+
+        const dir = resolve(output_dir);
+        mkdirSync(dir, { recursive: true });
+
+        if (language === "python") {
+          // Python project
+          writeFileSync(`${dir}/requirements.txt`, "anthropic>=0.40\nwebsockets>=13.0\npython-dotenv>=1.0\n");
+          writeFileSync(`${dir}/.env`, `AGENTBAZAAR_WS_TOKEN=${ws_token}\nANTHROPIC_API_KEY=YOUR_ANTHROPIC_API_KEY\n`);
+          writeFileSync(
+            `${dir}/agent.py`,
+            `import asyncio
+import json
+import os
+
+import anthropic
+import websockets
+from dotenv import load_dotenv
+
+load_dotenv()
+
+WS_TOKEN = os.environ["AGENTBAZAAR_WS_TOKEN"]
+API_KEY = os.environ["ANTHROPIC_API_KEY"]
+RECONNECT_SECONDS = 5
+
+client = anthropic.Anthropic(api_key=API_KEY)
+
+SYSTEM_PROMPT = """${system_prompt.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"""
+
+
+async def handle_task(task_text: str) -> str:
+    message = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1024,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": task_text}],
+    )
+    return message.content[0].text
+
+
+async def connect():
+    uri = f"wss://agentbazaar.dev/ws?token={WS_TOKEN}"
+    while True:
+        try:
+            print("Connecting to AgentBazaar...")
+            async with websockets.connect(uri) as ws:
+                print("Connected! Listening for jobs...")
+                async for raw in ws:
+                    msg = json.loads(raw)
+                    if "taskId" not in msg or "input" not in msg:
+                        continue
+
+                    task_id = msg["taskId"]
+                    inp = msg["input"]
+                    task_text = inp if isinstance(inp, str) else inp.get("task", json.dumps(inp))
+                    print(f"Job {task_id}: {task_text[:80]}")
+
+                    try:
+                        result = await asyncio.to_thread(handle_task, task_text)
+                        await ws.send(json.dumps({
+                            "taskId": task_id,
+                            "result": {"success": True, "agent": ${JSON.stringify(agent_name)}, "result": result},
+                            "status": 200,
+                            "final": True,
+                        }))
+                        print(f"Job {task_id}: responded")
+                    except Exception as e:
+                        print(f"Error: {e}")
+                        await ws.send(json.dumps({
+                            "taskId": task_id,
+                            "result": {"success": False, "error": "Agent error"},
+                            "status": 500,
+                            "final": True,
+                        }))
+        except Exception as e:
+            print(f"Disconnected: {e}. Reconnecting in {RECONNECT_SECONDS}s...")
+            await asyncio.sleep(RECONNECT_SECONDS)
+
+
+if __name__ == "__main__":
+    asyncio.run(connect())
+`,
+          );
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: [
+                  `Agent project created at ${dir}!`,
+                  ``,
+                  `**Files generated:**`,
+                  `- agent.py — WebSocket listener + Claude handler`,
+                  `- .env — Add your ANTHROPIC_API_KEY here`,
+                  `- requirements.txt — Python dependencies`,
+                  ``,
+                  `**To run:**`,
+                  `1. cd ${dir}`,
+                  `2. Add your ANTHROPIC_API_KEY to .env`,
+                  `3. pip install -r requirements.txt`,
+                  `4. python agent.py`,
+                  ``,
+                  `Your agent will connect to AgentBazaar and start handling jobs!`,
+                ].join("\n"),
+              },
+            ],
+          };
+        }
+
+        // Node.js project (default)
+        const pkg = JSON.stringify(
+          {
+            name: agent_name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+            version: "1.0.0",
+            private: true,
+            type: "module",
+            scripts: { start: "node index.js" },
+            dependencies: { "@anthropic-ai/sdk": "^0.80.0", ws: "^8.18.0" },
+          },
+          null,
+          2,
+        );
+        writeFileSync(`${dir}/package.json`, pkg + "\n");
+        writeFileSync(`${dir}/.env`, `AGENTBAZAAR_WS_TOKEN=${ws_token}\nANTHROPIC_API_KEY=YOUR_ANTHROPIC_API_KEY\n`);
+
+        const escapedPrompt = system_prompt.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$/g, "\\$");
+        writeFileSync(
+          `${dir}/index.js`,
+          `import Anthropic from "@anthropic-ai/sdk";
+import WebSocket from "ws";
+import { readFileSync } from "fs";
+
+// Load .env
+const env = Object.fromEntries(
+  readFileSync(new URL(".env", import.meta.url), "utf-8")
+    .split("\\n").filter(l => l && !l.startsWith("#"))
+    .map(l => { const [k, ...v] = l.split("="); return [k, v.join("=")]; })
+);
+
+const WS_TOKEN = env.AGENTBAZAAR_WS_TOKEN || process.env.AGENTBAZAAR_WS_TOKEN;
+const API_KEY = env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
+
+if (!WS_TOKEN) { console.error("Missing AGENTBAZAAR_WS_TOKEN in .env"); process.exit(1); }
+if (!API_KEY) { console.error("Missing ANTHROPIC_API_KEY in .env"); process.exit(1); }
+
+const client = new Anthropic({ apiKey: API_KEY });
+const SYSTEM_PROMPT = \`${escapedPrompt}\`;
+
+let ws = null;
+
+function connect() {
+  console.log("Connecting to AgentBazaar...");
+  ws = new WebSocket(\`wss://agentbazaar.dev/ws?token=\${WS_TOKEN}\`);
+
+  ws.on("open", () => console.log("Connected! Listening for jobs..."));
+
+  ws.on("message", async (data) => {
+    try {
+      const msg = JSON.parse(data.toString());
+      if (!msg.taskId || !msg.input) return;
+      const taskText = typeof msg.input === "string" ? msg.input : msg.input.task || JSON.stringify(msg.input);
+      console.log(\`Job \${msg.taskId}: \${taskText.slice(0, 80)}\`);
+
+      const response = await client.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1024,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: taskText }],
+      });
+
+      const result = response.content[0]?.text || "";
+      ws.send(JSON.stringify({ taskId: msg.taskId, result: { success: true, agent: ${JSON.stringify(agent_name)}, result }, status: 200, final: true }));
+      console.log(\`Job \${msg.taskId}: responded\`);
+    } catch (err) {
+      console.error("Error:", err.message);
+      try {
+        const msg = JSON.parse(data.toString());
+        if (msg.taskId) ws.send(JSON.stringify({ taskId: msg.taskId, result: { success: false, error: "Agent error" }, status: 500, final: true }));
+      } catch {}
+    }
+  });
+
+  ws.on("close", () => { console.log("Disconnected. Reconnecting..."); setTimeout(connect, 5000); });
+  ws.on("error", (err) => console.error("WS error:", err.message));
+}
+
+connect();
+process.on("SIGINT", () => { if (ws) ws.close(); process.exit(0); });
+`,
+        );
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: [
+                `Agent project created at ${dir}!`,
+                ``,
+                `**Files generated:**`,
+                `- index.js — WebSocket listener + Claude handler`,
+                `- .env — Add your ANTHROPIC_API_KEY here`,
+                `- package.json — Node.js dependencies`,
+                ``,
+                `**To run:**`,
+                `1. cd ${dir}`,
+                `2. Add your ANTHROPIC_API_KEY to .env`,
+                `3. npm install`,
+                `4. npm start`,
+                ``,
+                `Your agent will connect to AgentBazaar and start handling jobs!`,
+              ].join("\n"),
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `Failed to create project: ${err instanceof Error ? err.message : err}` }],
+        };
+      }
+    },
+  );
 }
