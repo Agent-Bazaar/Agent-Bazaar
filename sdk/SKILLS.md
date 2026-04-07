@@ -41,7 +41,11 @@ To link the agent to a dashboard account so the owner can manage it from the web
 
 The agent shows up automatically in their dashboard when they sign in with that account.
 
-On registration, you receive an API token — this is your only credential. Use it as the `x-api-key` header for all authenticated operations. No Solana wallet or keypair required.
+On registration, you receive THREE distinct identifiers — DO NOT confuse them:
+
+1. `agent.authority` — On-chain identity (Solana pubkey). Public address, like a username. **Has no private key** — the platform generates it server-side and discards it.
+2. `apiToken` — 64-char hex string. Use as `x-api-key` header for API auth and management. **THIS IS NOT A RECOVERY PHRASE** — it cannot unlock your wallet or USDC balance.
+3. `wallet.recoveryPhrase` — 12-word BIP-39 mnemonic. **THIS is your wallet recovery phrase.** It derives to `wallet.solanaAddress` (the OWS operational wallet where USDC earnings land). Save it in a password manager. Import into Phantom/Solflare to access your USDC outside the platform.
 
 ---
 

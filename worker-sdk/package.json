@@ -1,0 +1,43 @@
+{
+  "name": "@agentsbazaar/worker",
+  "version": "0.2.0",
+  "description": "AgentBazaar Gateway Protocol client — build live 24/7 agents that connect to the autonomous agent economy",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "files": ["dist", "README.md"],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "agentbazaar",
+    "agent",
+    "worker",
+    "gateway",
+    "websocket",
+    "autonomous",
+    "ai",
+    "solana",
+    "a2a"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Agent-Bazaar/agentbazaar.git",
+    "directory": "worker-sdk"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  }
+}

@@ -233,22 +233,42 @@ export function registerAgentTools(server: McpServer): void {
 
         if (result.apiToken) {
           lines.push(``);
-          lines.push(`**API Token:** \`${result.apiToken}\``);
-          lines.push(`> Save this token — use it as \`x-api-key\` header to manage your agent.`);
+          lines.push(`## 🔑 API Token (for managing your agent via API)`);
+          lines.push(`\`${result.apiToken}\``);
+          lines.push(
+            `> Use this as the \`x-api-key\` header. THIS IS NOT A RECOVERY PHRASE — it cannot unlock your wallet. Save it for API access only.`,
+          );
         }
 
         if (result.wallet) {
           lines.push(``);
-          lines.push(`**Wallet:**`);
-          lines.push(`- Solana Address: \`${result.wallet.solanaAddress}\``);
-          lines.push(`- Recovery Phrase: \`${result.wallet.recoveryPhrase}\``);
-          lines.push(`> Save your recovery phrase! You can export this wallet to Phantom/Solflare anytime.`);
+          lines.push(`## 💰 Wallet (where USDC earnings land)`);
+          lines.push(`**Solana Address:** \`${result.wallet.solanaAddress}\``);
+          lines.push(``);
+          lines.push(`**🔐 RECOVERY PHRASE (12 words — SAVE THIS NOW):**`);
+          lines.push(`\`${result.wallet.recoveryPhrase}\``);
+          lines.push(``);
+          lines.push(`> ⚠️ This 12-word phrase is the ONLY way to access your USDC earnings outside the platform.`);
+          lines.push(`> Import into Phantom/Solflare to withdraw funds. Anyone with these words controls the wallet.`);
+          lines.push(`> Save it in a password manager NOW. We can't recover it for you later.`);
         }
 
         lines.push(``);
-        lines.push(`**Next steps:**`);
-        lines.push(`1. Use \`set_agent_image\` to upload a profile image or logo`);
-        lines.push(`2. Your agent has an OWS wallet — USDC payments go there automatically`);
+        lines.push(`## 📛 On-Chain Identity (Authority)`);
+        lines.push(
+          `Your agent's on-chain identity is \`${result.agent.authority}\` — this is the agent's public NFT-bound identifier (like a username).`,
+        );
+        lines.push(
+          `You DON'T sign with this. It has no private key. Signing happens via your wallet recovery phrase above.`,
+        );
+
+        lines.push(``);
+        lines.push(`## Next steps`);
+        lines.push(`1. Save your recovery phrase to a password manager`);
+        lines.push(`2. Use \`set_agent_image\` to upload a profile image`);
+        lines.push(
+          `3. USDC earnings land at \`${result.wallet?.solanaAddress || result.agent.authority}\` automatically`,
+        );
 
         return { content: [{ type: "text", text: lines.join("\n") }] };
       } catch (err) {
@@ -362,7 +382,10 @@ export function registerAgentTools(server: McpServer): void {
       agent_name: z.string().describe("Agent name (used in responses)"),
       ws_token: z.string().describe("WebSocket token from registration"),
       system_prompt: z.string().describe("What the agent does — becomes the AI system prompt"),
-      language: z.enum(["node", "python"]).default("node").describe("Project language: 'node' (JavaScript) or 'python'"),
+      language: z
+        .enum(["node", "python"])
+        .default("node")
+        .describe("Project language: 'node' (JavaScript) or 'python'"),
     },
     async ({ output_dir, agent_name, ws_token, system_prompt, language }) => {
       try {

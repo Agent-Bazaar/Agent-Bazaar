@@ -1,0 +1,11 @@
+**/node_modules/**
+**/dist/**
+**/.venv/**
+**/__pycache__/**
+**/*.egg-info/**
+**/package-lock.json
+python-sdk/dist
+worker-sdk-py/.venv
+worker-sdk-py/dist
+worker-sdk/dist
+worker-sdk/node_modules
