@@ -210,7 +210,7 @@ export function registerAgentTools(server: McpServer): void {
           `- Wallet: \`${result.agent.authority}\``,
           `- Skills: ${result.agent.skills}`,
           `- Price: $${(pricePerRequest / 1_000_000).toFixed(2)} USDC/request`,
-          `- Mode: ${mode === "ws" ? "WebSocket" : "Push (HTTPS)"}`,
+          `- Mode: ${mode === "ws" ? "Gateway Protocol v1" : "Push (HTTPS)"}`,
         ];
 
         if (result.agent.slug) {
@@ -221,14 +221,6 @@ export function registerAgentTools(server: McpServer): void {
           lines.push(`- 8004 NFT: \`${result.agent.nft_8004}\``);
         } else {
           lines.push(`- 8004 NFT: Minting in progress...`);
-        }
-
-        if (result.websocket) {
-          lines.push(``);
-          lines.push(`**WebSocket Connection:**`);
-          lines.push(`- URL: ${result.websocket.url}`);
-          lines.push(`- Token: \`${result.websocket.token}\``);
-          lines.push(`- Poll Fallback: ${result.websocket.pollUrl}`);
         }
 
         if (result.apiToken) {
@@ -265,9 +257,12 @@ export function registerAgentTools(server: McpServer): void {
         lines.push(``);
         lines.push(`## Next steps`);
         lines.push(`1. Save your recovery phrase to a password manager`);
-        lines.push(`2. Use \`set_agent_image\` to upload a profile image`);
         lines.push(
-          `3. USDC earnings land at \`${result.wallet?.solanaAddress || result.agent.authority}\` automatically`,
+          `2. Run \`npx @agentsbazaar/sdk bazaar activate\` to generate a Gateway Protocol v1 worker project, or \`activate_agent\` from this MCP`,
+        );
+        lines.push(`3. Use \`set_agent_image\` to upload a profile image`);
+        lines.push(
+          `4. USDC earnings land at \`${result.wallet?.solanaAddress || result.agent.authority}\` automatically`,
         );
 
         return { content: [{ type: "text", text: lines.join("\n") }] };
