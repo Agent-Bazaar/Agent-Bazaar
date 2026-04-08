@@ -244,6 +244,9 @@ class AgentWorker:
     _capacity_used: int = field(default=0, init=False, repr=False)
     _shutting_down: bool = field(default=False, init=False, repr=False)
     _reconnect_attempts: int = field(default=0, init=False, repr=False)
+    _last_heartbeat_sent_at: float = field(default=0.0, init=False, repr=False)
+    _last_heartbeat_ack_at: float = field(default=0.0, init=False, repr=False)
+    _unacked_heartbeats: int = field(default=0, init=False, repr=False)
 
     _job_handler: JobHandler | None = field(default=None, init=False, repr=False)
     _message_handler: MessageHandler | None = field(default=None, init=False, repr=False)
@@ -471,7 +474,8 @@ class AgentWorker:
                     self._log(f"READY — agent {agent.get('name')} live")
 
                 elif envelope.op == ServerOp.HEARTBEAT_ACK:
-                    pass  # no-op
+                    self._last_heartbeat_ack_at = asyncio.get_event_loop().time()
+                    self._unacked_heartbeats = 0
 
                 elif envelope.op == ServerOp.JOB_DISPATCH:
                     asyncio.create_task(self._handle_job(envelope.d or {}))
@@ -534,6 +538,18 @@ class AgentWorker:
                 elif envelope.op == ServerOp.RECONNECT:
                     self._log("Server requested reconnect")
                     break
+
+                elif envelope.op in (
+                    ServerOp.SESSION_STARTED,
+                    ServerOp.SESSION_ENDED,
+                    ServerOp.JOB_TIMEOUT_WARNING,
+                    ServerOp.PRESENCE_SYNC,
+                    ServerOp.JOB_CANCELLED,
+                ):
+                    # Informational events the worker doesn't need to act on
+                    # by default. Most agents don't care about these — silently
+                    # consume so they don't appear as "Unknown opcode" warnings.
+                    pass
 
                 else:
                     self._log(f"Unknown opcode: {envelope.op}")
@@ -608,14 +624,65 @@ class AgentWorker:
             self._log(f"Hire handler error: {e}")
 
     # ── Internal: heartbeat ─────────────────────────────────────────────────
+    #
+    # Two failure modes we have to handle:
+    #
+    # 1. The TCP connection died but the OS hasn't noticed yet. We detect
+    #    this by tracking unacked heartbeats — the gateway always sends
+    #    HEARTBEAT_ACK when it's alive. After 2 misses, force a reconnect
+    #    instead of waiting for the OS to time out (which can take minutes).
+    #
+    # 2. The host machine was suspended (laptop lid closed, App Nap, OS
+    #    sleep). The asyncio loop was frozen. When we wake up we see a huge
+    #    gap between "now" and the previous tick. The TCP socket is almost
+    #    certainly stale at that point — drop and reconnect immediately
+    #    rather than try to send on a dead socket.
 
     async def _heartbeat_loop(self, interval_ms: int) -> None:
-        interval = interval_ms / 1000
+        # Tick at half the protocol interval so we get ~2 chances to detect
+        # a stale connection before the gateway considers us dead.
+        tick = max(5.0, (interval_ms / 1000) / 2)
+        interval_s = interval_ms / 1000
+        loop = asyncio.get_event_loop()
+        self._last_heartbeat_sent_at = loop.time()
+        self._last_heartbeat_ack_at = loop.time()
+        self._unacked_heartbeats = 0
+
         while self._ws and not self._shutting_down:
             try:
-                await asyncio.sleep(interval)
-                if self._ws:
-                    await self._send(ClientOp.HEARTBEAT, {})
+                await asyncio.sleep(tick)
+                now = loop.time()
+                gap = now - self._last_heartbeat_sent_at
+
+                # Wake-up detection: huge gap means the host was suspended.
+                # The socket is dead even if its state still says open.
+                if gap > tick * 2.5:
+                    self._log(f"Wake-up detected ({gap:.1f}s gap, expected {tick:.1f}s) — forcing reconnect")
+                    if self._ws:
+                        try:
+                            await self._ws.close(code=4000, reason="wake-up")
+                        except Exception:
+                            pass
+                    return
+
+                if not self._ws:
+                    return
+
+                # Missed-ack detection.
+                if now - self._last_heartbeat_ack_at > interval_s * 1.5:
+                    self._unacked_heartbeats += 1
+                    if self._unacked_heartbeats >= 2:
+                        self._log(
+                            f"No HEARTBEAT_ACK for {now - self._last_heartbeat_ack_at:.1f}s — forcing reconnect"
+                        )
+                        try:
+                            await self._ws.close(code=4000, reason="missed-acks")
+                        except Exception:
+                            pass
+                        return
+
+                await self._send(ClientOp.HEARTBEAT, {})
+                self._last_heartbeat_sent_at = now
             except asyncio.CancelledError:
                 return
             except Exception as e:

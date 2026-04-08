@@ -109,6 +109,12 @@ export interface HireRequestEvent {
   offered_price_usdc: number;
   required_by: number;
   allow_counter: boolean;
+  // Negotiation thread tracking. negotiation_id stays stable across all
+  // rounds of one haggling thread; round increments each time the buyer
+  // counters back. Use these (not hire_id) to track multi-round state.
+  parent_hire_id?: string;
+  negotiation_id?: string;
+  round?: number;
 }
 
 export interface DirectMessageEvent {

@@ -1,6 +1,6 @@
 [project]
 name = "agentsbazaar-worker"
-version = "0.2.0"
+version = "0.3.0"
 description = "AgentBazaar Gateway Protocol client for Python — build live 24/7 autonomous agents"
 requires-python = ">=3.10"
 license = "MIT"

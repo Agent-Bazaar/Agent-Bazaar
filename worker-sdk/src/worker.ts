@@ -133,6 +133,25 @@ export interface HireContext {
   offered_price_usdc: number;
   required_by: number;
   allow_counter: boolean;
+  /**
+   * Stable identifier for this multi-round negotiation thread. Stays the
+   * same across every HIRE_REQUEST in one negotiation, even though hire_id
+   * changes each round. Use this to key per-negotiation state in your
+   * worker (e.g. "I have already countered this buyer twice, time to accept
+   * or walk away"). Falls back to hire_id if the platform did not stamp
+   * one (older platform builds).
+   */
+  negotiation_id: string;
+  /**
+   * Round number for this negotiation, starting at 1 for the buyer's
+   * initial request. Increments each time the buyer counter-offers back.
+   */
+  round: number;
+  /**
+   * The hire_id this request is countering, if the buyer is replying to
+   * a prior counter-offer. Undefined for the first round.
+   */
+  parent_hire_id?: string;
 
   accept(): Promise<void>;
   decline(reason?: string): Promise<void>;
@@ -211,6 +230,10 @@ export class AgentWorker extends EventEmitter {
   private session_id: string | null = null;
   private last_seq = 0;
   private heartbeat_timer: NodeJS.Timeout | null = null;
+  private heartbeat_interval_ms = 30_000;
+  private last_heartbeat_sent_at = 0;
+  private last_heartbeat_ack_at = 0;
+  private unacked_heartbeats = 0;
   private reconnect_attempts = 0;
   private reconnect_delay: number;
   private shutting_down = false;
@@ -491,7 +514,8 @@ export class AgentWorker extends EventEmitter {
         return;
 
       case ServerOp.HEARTBEAT_ACK:
-        // Heartbeat acknowledged; no action needed
+        this.last_heartbeat_ack_at = Date.now();
+        this.unacked_heartbeats = 0;
         return;
 
       case ServerOp.JOB_DISPATCH:
@@ -542,6 +566,21 @@ export class AgentWorker extends EventEmitter {
         this.emit("presence_sync", envelope.d as PresenceSyncEvent);
         return;
 
+      case ServerOp.SESSION_STARTED:
+        // Server is informing us a buyer just opened a multi-turn session
+        // with us. Most workers don't need to do anything; emit so callers
+        // who care can subscribe.
+        this.emit("session_started", envelope.d);
+        return;
+
+      case ServerOp.SESSION_ENDED:
+        this.emit("session_ended", envelope.d);
+        return;
+
+      case ServerOp.JOB_TIMEOUT_WARNING:
+        this.emit("job_timeout_warning", envelope.d);
+        return;
+
       case ServerOp.RECONNECT:
         this.log("Server requested reconnect");
         if (this.ws) this.ws.close(4010, "Reconnect requested");
@@ -562,6 +601,7 @@ export class AgentWorker extends EventEmitter {
 
   private handleHello(hello: HelloEvent): void {
     this.session_id = hello.session_id;
+    this.heartbeat_interval_ms = hello.heartbeat_interval_ms;
     this.log(`HELLO received, session ${hello.session_id}, heartbeat ${hello.heartbeat_interval_ms}ms`);
 
     // Send IDENTIFY
@@ -755,6 +795,11 @@ export class AgentWorker extends EventEmitter {
       offered_price_usdc: hire.offered_price_usdc,
       required_by: hire.required_by,
       allow_counter: hire.allow_counter,
+      // Negotiation thread tracking. Falls back to hire_id when the platform
+      // did not stamp a negotiation_id (older platform builds).
+      negotiation_id: hire.negotiation_id ?? hire.hire_id,
+      round: hire.round ?? 1,
+      parent_hire_id: hire.parent_hire_id,
 
       accept: async () => this.send(ClientOp.HIRE_ACCEPT, { hire_id: hire.hire_id }),
       decline: async (reason) => this.send(ClientOp.HIRE_DECLINE, { hire_id: hire.hire_id, reason }),
@@ -768,16 +813,82 @@ export class AgentWorker extends EventEmitter {
   }
 
   // ── Heartbeat ─────────────────────────────────────────────────────────────
+  //
+  // Two failure modes we have to handle:
+  //
+  // 1. Network died but we don't know it yet (router NAT timeout, Cloudflare
+  //    edge dropped us, transparent proxy ate the FIN). The OS hasn't
+  //    surfaced a close yet so ws.readyState is still OPEN. We detect this
+  //    by tracking unacked heartbeats — if the gateway is alive it always
+  //    sends back HEARTBEAT_ACK. After 2 missed acks we force-reconnect
+  //    instead of waiting for the OS to time out (which can take minutes).
+  //
+  // 2. The host machine was suspended (laptop lid closed, App Nap). The
+  //    Node event loop was frozen so the timer didn't fire on schedule.
+  //    When we wake up we'll see a huge gap between "now" and the previous
+  //    tick. The TCP socket is almost certainly stale at that point — the
+  //    safe move is to drop and reconnect immediately rather than try to
+  //    send on a dead socket and wait for the eventual close.
 
   private startHeartbeat(intervalMs: number): void {
     this.stopHeartbeat();
+    this.last_heartbeat_sent_at = Date.now();
+    this.last_heartbeat_ack_at = Date.now();
+    this.unacked_heartbeats = 0;
+
+    // Use setInterval at half the protocol interval so we get ~2 chances to
+    // detect a stale connection before the gateway would consider us dead.
+    const tickMs = Math.max(5_000, Math.floor(intervalMs / 2));
+
     this.heartbeat_timer = setInterval(() => {
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.send(ClientOp.HEARTBEAT, {});
+      const now = Date.now();
+      const gap = now - this.last_heartbeat_sent_at;
+
+      // Wake-up detection: if the timer didn't fire for >2.5x its expected
+      // period, the host was suspended. Force a reconnect — the underlying
+      // socket is almost certainly dead even if readyState still says OPEN.
+      if (gap > tickMs * 2.5) {
+        this.log(`Wake-up detected (${gap}ms gap, expected ${tickMs}ms) — forcing reconnect`);
+        this.forceReconnect("wake-up");
+        return;
       }
-    }, intervalMs);
-    if (this.heartbeat_timer && typeof this.heartbeat_timer.unref === "function") {
-      this.heartbeat_timer.unref();
+
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+
+      // Missed-ack detection: if the previous heartbeat never got ACKed
+      // before this tick, count it. After 2 misses, the connection is
+      // dead in the water — force a reconnect instead of waiting for the
+      // OS to give up.
+      if (now - this.last_heartbeat_ack_at > intervalMs * 1.5) {
+        this.unacked_heartbeats++;
+        if (this.unacked_heartbeats >= 2) {
+          this.log(`No HEARTBEAT_ACK for ${now - this.last_heartbeat_ack_at}ms — forcing reconnect`);
+          this.forceReconnect("missed-acks");
+          return;
+        }
+      }
+
+      this.send(ClientOp.HEARTBEAT, {});
+      this.last_heartbeat_sent_at = now;
+    }, tickMs);
+
+    // NOTE: we deliberately do NOT call .unref() here. The heartbeat timer
+    // is what keeps a long-lived worker process alive between jobs.
+  }
+
+  private forceReconnect(reason: string): void {
+    this.stopHeartbeat();
+    if (this.ws) {
+      try {
+        this.ws.terminate();
+      } catch {
+        // ignore
+      }
+    }
+    this.state = "disconnected";
+    this.emit("disconnected", { code: 4000, reason });
+    if (!this.shutting_down && this.opts.auto_reconnect) {
+      this.scheduleReconnect();
     }
   }
 

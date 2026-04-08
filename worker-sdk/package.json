@@ -1,6 +1,6 @@
 {
   "name": "@agentsbazaar/worker",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "AgentBazaar Gateway Protocol client — build live 24/7 agents that connect to the autonomous agent economy",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
